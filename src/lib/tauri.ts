@@ -182,3 +182,156 @@ export async function generateBulkPasswords(req: PasswordRequest): Promise<BulkP
 export async function exportPasswords(passwords: string[], format: string, outputPath: string): Promise<string> {
   return invoke<string>("export_passwords", { passwords, format, outputPath });
 }
+
+// ── Encoder/Decoder ────────────────────────────────────────────
+export async function encodeBase64(input: string): Promise<string> {
+  return invoke<string>("encode_base64", { input });
+}
+export async function decodeBase64(input: string): Promise<string> {
+  return invoke<string>("decode_base64", { input });
+}
+export async function encodeBase64Url(input: string): Promise<string> {
+  return invoke<string>("encode_base64url", { input });
+}
+export async function decodeBase64Url(input: string): Promise<string> {
+  return invoke<string>("decode_base64url", { input });
+}
+export async function encodeBase32(input: string): Promise<string> {
+  return invoke<string>("encode_base32", { input });
+}
+export async function decodeBase32(input: string): Promise<string> {
+  return invoke<string>("decode_base32", { input });
+}
+export async function encodeBase58(input: string): Promise<string> {
+  return invoke<string>("encode_base58", { input });
+}
+export async function decodeBase58(input: string): Promise<string> {
+  return invoke<string>("decode_base58", { input });
+}
+export async function encodeHex(input: string): Promise<string> {
+  return invoke<string>("encode_hex", { input });
+}
+export async function decodeHex(input: string): Promise<string> {
+  return invoke<string>("decode_hex", { input });
+}
+export async function encodeUrl(input: string): Promise<string> {
+  return invoke<string>("encode_url", { input });
+}
+export async function decodeUrl(input: string): Promise<string> {
+  return invoke<string>("decode_url", { input });
+}
+export async function encodeHtml(input: string): Promise<string> {
+  return invoke<string>("encode_html", { input });
+}
+export async function decodeHtml(input: string): Promise<string> {
+  return invoke<string>("decode_html", { input });
+}
+export async function encodeUnicode(input: string): Promise<string> {
+  return invoke<string>("encode_unicode", { input });
+}
+export async function decodeUnicode(input: string): Promise<string> {
+  return invoke<string>("decode_unicode", { input });
+}
+
+export interface JwtParts {
+  header: string;
+  payload: string;
+  signature: string;
+  valid_json: boolean;
+}
+export async function decodeJwt(token: string): Promise<JwtParts> {
+  return invoke<JwtParts>("decode_jwt", { token });
+}
+
+export async function textToMorse(input: string): Promise<string> {
+  return invoke<string>("text_to_morse", { input });
+}
+export async function morseToText(input: string): Promise<string> {
+  return invoke<string>("morse_to_text", { input });
+}
+export async function textToBinary(input: string): Promise<string> {
+  return invoke<string>("text_to_binary", { input });
+}
+export async function binaryToText(input: string): Promise<string> {
+  return invoke<string>("binary_to_text", { input });
+}
+export async function textToOctal(input: string): Promise<string> {
+  return invoke<string>("text_to_octal", { input });
+}
+export async function octalToText(input: string): Promise<string> {
+  return invoke<string>("octal_to_text", { input });
+}
+
+// ── Hasher ─────────────────────────────────────────────────────
+export async function hashText(input: string, algorithm: string): Promise<string> {
+  return invoke<string>("hash_text", { input, algorithm });
+}
+
+export interface HashResult {
+  algorithm: string;
+  hash: string;
+  file_size: number;
+}
+export async function hashFile(inputPath: string, algorithm: string): Promise<HashResult> {
+  return invoke<HashResult>("hash_file", { inputPath, algorithm });
+}
+
+export interface MultiHashResult {
+  md5: string;
+  sha1: string;
+  sha256: string;
+  sha512: string;
+  blake3: string;
+  crc32: string;
+  file_size: number;
+}
+export async function hashFileAll(inputPath: string): Promise<MultiHashResult> {
+  return invoke<MultiHashResult>("hash_file_all", { inputPath });
+}
+
+export interface VerifyResult {
+  matches: boolean;
+  computed: string;
+  expected: string;
+}
+export async function verifyFileHash(inputPath: string, algorithm: string, expectedHash: string): Promise<VerifyResult> {
+  return invoke<VerifyResult>("verify_file_hash", { inputPath, algorithm, expectedHash });
+}
+
+// ── Encryption ─────────────────────────────────────────────────
+export async function encryptTextAes(input: string, passphrase: string): Promise<string> {
+  return invoke<string>("encrypt_text_aes", { input, passphrase });
+}
+export async function decryptTextAes(input: string, passphrase: string): Promise<string> {
+  return invoke<string>("decrypt_text_aes", { input, passphrase });
+}
+export async function encryptTextChacha(input: string, passphrase: string): Promise<string> {
+  return invoke<string>("encrypt_text_chacha", { input, passphrase });
+}
+export async function decryptTextChacha(input: string, passphrase: string): Promise<string> {
+  return invoke<string>("decrypt_text_chacha", { input, passphrase });
+}
+export async function encryptRot13(input: string): Promise<string> {
+  return invoke<string>("encrypt_rot13", { input });
+}
+export async function encryptCaesar(input: string, shift: number): Promise<string> {
+  return invoke<string>("encrypt_caesar", { input, shift });
+}
+export async function encryptVigenere(input: string, key: string): Promise<string> {
+  return invoke<string>("encrypt_vigenere", { input, key });
+}
+export async function encryptXor(input: string, key: string): Promise<string> {
+  return invoke<string>("encrypt_xor", { input, key });
+}
+export async function encryptFileAes(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
+  return invoke<string>("encrypt_file_aes", { inputPath, outputPath, passphrase });
+}
+export async function decryptFileAes(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
+  return invoke<string>("decrypt_file_aes", { inputPath, outputPath, passphrase });
+}
+export async function encryptFileChacha(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
+  return invoke<string>("encrypt_file_chacha", { inputPath, outputPath, passphrase });
+}
+export async function decryptFileChacha(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
+  return invoke<string>("decrypt_file_chacha", { inputPath, outputPath, passphrase });
+}

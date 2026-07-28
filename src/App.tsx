@@ -12,6 +12,9 @@ import ConversionPage from "./components/ConversionPage";
 import BatchPage from "./components/BatchPage";
 import PdfToolsPage from "./components/PdfToolsPage";
 import PasswordGeneratorPage from "./components/PasswordGeneratorPage";
+import EncoderDecoderPage from "./components/EncoderDecoderPage";
+import HasherPage from "./components/HasherPage";
+import EncryptionPage from "./components/EncryptionPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -31,6 +34,9 @@ function AppInner() {
       case "batch": return <BatchPage key="batch" />;
       case "pdf": return <PdfToolsPage key="pdf" />;
       case "password": return <PasswordGeneratorPage key="password" />;
+      case "encoder": return <EncoderDecoderPage key="encoder" />;
+      case "hasher": return <HasherPage key="hasher" />;
+      case "encryption": return <EncryptionPage key="encryption" />;
       default: return <Welcome key="welcome" onNavigate={setActiveTool} />;
     }
   };

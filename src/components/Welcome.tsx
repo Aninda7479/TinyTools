@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode, Wand2, Layers, FileText, Key } from "lucide-react";
+import { Search, Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode, Wand2, Layers, FileText, Key, Binary, Hash, Lock } from "lucide-react";
 import type { Tool } from "./Sidebar";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -16,6 +16,9 @@ const features: { icon: typeof Brain; title: string; description: string; tool: 
   { icon: Wand2, title: "Image Process", description: "Resize, grayscale, rotate, flip, blur, sharpen", tool: "process", keywords: "process resize grayscale rotate flip blur sharpen filter adjust" },
   { icon: Layers, title: "Batch Engine", description: "Process 100+ files in parallel with Rust multi-threading", tool: "batch", keywords: "batch bulk parallel multiple files process speed rust" },
   { icon: FileText, title: "PDF Tools", description: "Merge, split, crop, rotate, encrypt, watermark, compress PDFs", tool: "pdf", keywords: "pdf merge split crop rotate encrypt watermark compress text extract pages document" },
+  { icon: Binary, title: "Encoder / Decoder", description: "Base64, Base32, Base58, Hex, URL, HTML, Unicode, JWT, Morse, Binary", tool: "encoder", keywords: "encode decode base64 base32 base58 hex url html unicode jwt morse binary octal" },
+  { icon: Hash, title: "Hasher", description: "MD5, SHA-256, SHA-512, BLAKE3, CRC32, XXH3, file integrity", tool: "hasher", keywords: "hash checksum md5 sha blake3 crc32 xxh3 file integrity verify" },
+  { icon: Lock, title: "Encryption", description: "AES-256-GCM, ChaCha20, ROT13, Caesar, Vigenère, file encryption", tool: "encryption", keywords: "encrypt decrypt aes chacha20 rot13 caesar vigenere xor cipher file password" },
 ];
 
 export default function Welcome({ onNavigate }: { onNavigate: (tool: Tool) => void }) {

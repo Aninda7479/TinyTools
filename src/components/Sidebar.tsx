@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
-import { Sparkles, Image, QrCode, Wand2, Brain, Shield, Scissors, RefreshCw, Layers, FileText, Key } from "lucide-react";
+import { Sparkles, Image, QrCode, Wand2, Brain, Shield, Scissors, RefreshCw, Layers, FileText, Key, Binary, Hash, Lock } from "lucide-react";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-export type Tool = "welcome" | "compress" | "qr" | "process" | "ai" | "privacy" | "editing" | "conversion" | "batch" | "pdf" | "password";
+export type Tool = "welcome" | "compress" | "qr" | "process" | "ai" | "privacy" | "editing" | "conversion" | "batch" | "pdf" | "password" | "encoder" | "hasher" | "encryption";
 
 interface SidebarProps {
   activeTool: Tool;
@@ -18,6 +18,9 @@ const tools: { id: Tool; icon: typeof Image; label: string }[] = [
   { id: "conversion", icon: RefreshCw, label: "Convert" },
   { id: "pdf", icon: FileText, label: "PDF Tools" },
   { id: "password", icon: Key, label: "Password Gen" },
+  { id: "encoder", icon: Binary, label: "Encoder" },
+  { id: "hasher", icon: Hash, label: "Hasher" },
+  { id: "encryption", icon: Lock, label: "Encrypt" },
   { id: "qr", icon: QrCode, label: "QR Code" },
   { id: "process", icon: Wand2, label: "Process" },
   { id: "batch", icon: Layers, label: "Batch" },
