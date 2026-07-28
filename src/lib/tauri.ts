@@ -140,3 +140,45 @@ export async function addPdfWatermark(input: string, output: string, text: strin
 export async function addPageNumbers(input: string, output: string, fontSize: number = 12, position: string = "bottom-center"): Promise<ToolResult> {
   return invoke<ToolResult>("add_page_numbers", { inputPath: input, outputPath: output, fontSize, position });
 }
+
+// Password Generator
+export interface PasswordRequest {
+  mode: string;
+  length?: number;
+  word_count?: number;
+  count?: number;
+  uppercase?: boolean;
+  lowercase?: boolean;
+  digits?: boolean;
+  symbols?: boolean;
+  exclude_ambiguous?: boolean;
+  custom_symbols?: string;
+  separator?: string;
+  pattern?: string;
+}
+
+export interface GeneratedPassword {
+  password: string;
+  entropy_bits: number;
+  strength_label: string;
+  charset_size: number;
+  length: number;
+}
+
+export interface BulkPasswordResult {
+  passwords: GeneratedPassword[];
+  count: number;
+  exported_path: string | null;
+}
+
+export async function generatePassword(req: PasswordRequest): Promise<GeneratedPassword> {
+  return invoke<GeneratedPassword>("generate_password", { req });
+}
+
+export async function generateBulkPasswords(req: PasswordRequest): Promise<BulkPasswordResult> {
+  return invoke<BulkPasswordResult>("generate_bulk", { req });
+}
+
+export async function exportPasswords(passwords: string[], format: string, outputPath: string): Promise<string> {
+  return invoke<string>("export_passwords", { passwords, format, outputPath });
+}

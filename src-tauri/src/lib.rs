@@ -55,6 +55,10 @@ pub fn run() {
             commands::pdf_tools::flatten_pdf,
             commands::pdf_tools::add_pdf_watermark,
             commands::pdf_tools::add_page_numbers,
+            // Password Generator
+            commands::password_tools::generate_password,
+            commands::password_tools::generate_bulk,
+            commands::password_tools::export_passwords,
         ])
         .run(tauri::generate_context!())
         .expect("error while running TinyTools");

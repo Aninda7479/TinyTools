@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode, Wand2, Layers, FileText } from "lucide-react";
+import { Search, Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode, Wand2, Layers, FileText, Key } from "lucide-react";
 import type { Tool } from "./Sidebar";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -12,6 +12,7 @@ const features: { icon: typeof Brain; title: string; description: string; tool: 
   { icon: Image, title: "Image Compress", description: "Reduce file sizes with adjustable quality", tool: "compress", keywords: "compress reduce size quality jpeg jpg optimize small" },
   { icon: RefreshCw, title: "Compression & Conversion", description: "Format converter, HEIC, vectorize, smart compress", tool: "conversion", keywords: "convert format heic svg vectorize compress transform change" },
   { icon: QrCode, title: "QR Code Generator", description: "Custom dots, gradients, logos, frames, export SVG/PNG/WebP", tool: "qr", keywords: "qr code generator barcode scan custom gradient logo frame" },
+  { icon: Key, title: "Password Generator", description: "CSPRNG passwords, passphrases, PINs, pronounceable, bulk export", tool: "password", keywords: "password generator random passphrase pin diceware secure crypto csprng bulk" },
   { icon: Wand2, title: "Image Process", description: "Resize, grayscale, rotate, flip, blur, sharpen", tool: "process", keywords: "process resize grayscale rotate flip blur sharpen filter adjust" },
   { icon: Layers, title: "Batch Engine", description: "Process 100+ files in parallel with Rust multi-threading", tool: "batch", keywords: "batch bulk parallel multiple files process speed rust" },
   { icon: FileText, title: "PDF Tools", description: "Merge, split, crop, rotate, encrypt, watermark, compress PDFs", tool: "pdf", keywords: "pdf merge split crop rotate encrypt watermark compress text extract pages document" },
