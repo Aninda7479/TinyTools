@@ -162,9 +162,9 @@ const categoryIds = new Set(sidebarCategories.map((c) => c.id));
 export default function Sidebar({ activeTool, onToolSelect }: SidebarProps) {
   return (
     <aside className="w-16 flex flex-col items-center py-4 gap-1.5 border-r border-border bg-surface/50 backdrop-blur-xl">
-      <div className="flex items-center justify-center w-10 h-10 mb-3">
+      {/* <div className="flex items-center justify-center w-10 h-10 mb-3">
         <Sparkles className="w-5 h-5 text-blue-400" />
-      </div>
+      </div> */}
 
       {sidebarCategories.map((cat) => {
         const Icon = cat.icon;

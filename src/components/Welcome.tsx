@@ -152,17 +152,9 @@ export default function Welcome({ onNavigate }: { onNavigate: (tool: Tool, sub?:
   }, [query]);
 
   return (
-    <div className="flex flex-col h-full gap-5">
-      <div className="flex items-center gap-3 pt-2">
-        <Sparkles className="w-7 h-7 text-blue-400 shrink-0" />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">TinyTools</h1>
-          <p className="text-white/40 text-xs">Lightweight tools for everyday tasks — 100% offline</p>
-        </div>
-      </div>
-
-      <div className="relative w-full max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+    <div className="flex flex-col h-full">
+      <div className="relative flex w-full max-w-sm mx-auto pb-2">
+        <Search className="absolute ml-3 mt-3 w-4 h-4 text-white/90 pointer-events-none z-10" />
         <input
           type="text"
           placeholder="Search all tools..."
