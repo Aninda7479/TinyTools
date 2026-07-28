@@ -299,14 +299,14 @@ export async function verifyFileHash(inputPath: string, algorithm: string, expec
 }
 
 // ── Encryption ─────────────────────────────────────────────────
-export async function encryptTextAes(input: string, passphrase: string): Promise<string> {
-  return invoke<string>("encrypt_text_aes", { input, passphrase });
+export async function encryptTextAes(input: string, passphrase: string, kdf: string = "argon2"): Promise<string> {
+  return invoke<string>("encrypt_text_aes", { input, passphrase, kdf });
 }
 export async function decryptTextAes(input: string, passphrase: string): Promise<string> {
   return invoke<string>("decrypt_text_aes", { input, passphrase });
 }
-export async function encryptTextChacha(input: string, passphrase: string): Promise<string> {
-  return invoke<string>("encrypt_text_chacha", { input, passphrase });
+export async function encryptTextChacha(input: string, passphrase: string, kdf: string = "argon2"): Promise<string> {
+  return invoke<string>("encrypt_text_chacha", { input, passphrase, kdf });
 }
 export async function decryptTextChacha(input: string, passphrase: string): Promise<string> {
   return invoke<string>("decrypt_text_chacha", { input, passphrase });
@@ -323,14 +323,14 @@ export async function encryptVigenere(input: string, key: string): Promise<strin
 export async function encryptXor(input: string, key: string): Promise<string> {
   return invoke<string>("encrypt_xor", { input, key });
 }
-export async function encryptFileAes(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
-  return invoke<string>("encrypt_file_aes", { inputPath, outputPath, passphrase });
+export async function encryptFileAes(inputPath: string, outputPath: string, passphrase: string, kdf: string = "argon2"): Promise<string> {
+  return invoke<string>("encrypt_file_aes", { inputPath, outputPath, passphrase, kdf });
 }
 export async function decryptFileAes(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
   return invoke<string>("decrypt_file_aes", { inputPath, outputPath, passphrase });
 }
-export async function encryptFileChacha(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
-  return invoke<string>("encrypt_file_chacha", { inputPath, outputPath, passphrase });
+export async function encryptFileChacha(inputPath: string, outputPath: string, passphrase: string, kdf: string = "argon2"): Promise<string> {
+  return invoke<string>("encrypt_file_chacha", { inputPath, outputPath, passphrase, kdf });
 }
 export async function decryptFileChacha(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
   return invoke<string>("decrypt_file_chacha", { inputPath, outputPath, passphrase });

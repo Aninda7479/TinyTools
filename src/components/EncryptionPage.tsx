@@ -25,6 +25,7 @@ export default function EncryptionPage() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [passphrase, setPassphrase] = useState("");
+  const [kdf, setKdf] = useState("argon2");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -51,12 +52,12 @@ export default function EncryptionPage() {
       switch (active) {
         case "text-aes":
           result = textMode === "encrypt"
-            ? await api.encryptTextAes(input, passphrase)
+            ? await api.encryptTextAes(input, passphrase, kdf)
             : await api.decryptTextAes(input, passphrase);
           break;
         case "text-chacha":
           result = textMode === "encrypt"
-            ? await api.encryptTextChacha(input, passphrase)
+            ? await api.encryptTextChacha(input, passphrase, kdf)
             : await api.decryptTextChacha(input, passphrase);
           break;
         case "text-classic":
@@ -92,12 +93,12 @@ export default function EncryptionPage() {
       switch (active) {
         case "file-aes":
           result = textMode === "encrypt"
-            ? await api.encryptFileAes(filePath, outPath, passphrase)
+            ? await api.encryptFileAes(filePath, outPath, passphrase, kdf)
             : await api.decryptFileAes(filePath, outPath.replace(".enc", ".dec"), passphrase);
           break;
         case "file-chacha":
           result = textMode === "encrypt"
-            ? await api.encryptFileChacha(filePath, outPath, passphrase)
+            ? await api.encryptFileChacha(filePath, outPath, passphrase, kdf)
             : await api.decryptFileChacha(filePath, outPath.replace(".enc", ".dec"), passphrase);
           break;
       }
@@ -170,13 +171,30 @@ export default function EncryptionPage() {
           </div>
 
           {active !== "text-classic" && (
-            <div>
-              <span className="text-[10px] text-white/30 uppercase tracking-wider mb-1.5 block">Passphrase</span>
-              <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
-                placeholder="Enter encryption passphrase..."
-                className="w-full rounded-xl bg-white/5 border border-border px-3 py-2 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors"
-              />
-              <p className="text-[9px] text-white/20 mt-1">Key derived via Argon2id (memory-hard KDF)</p>
+            <div className="space-y-2">
+              <div>
+                <span className="text-[10px] text-white/30 uppercase tracking-wider mb-1.5 block">Passphrase</span>
+                <input type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)}
+                  placeholder="Enter encryption passphrase..."
+                  className="w-full rounded-xl bg-white/5 border border-border px-3 py-2 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-white/30 uppercase tracking-wider mb-1.5 block">Key Derivation</span>
+                <div className="flex gap-1.5">
+                  {([
+                    { value: "argon2", label: "Argon2id", note: "Memory-hard" },
+                    { value: "pbkdf2", label: "PBKDF2", note: "100K iter" },
+                  ]).map((k) => (
+                    <button key={k.value} onClick={() => setKdf(k.value)}
+                      className={`flex-1 px-2 py-2 rounded-lg text-[11px] transition-colors flex flex-col items-center gap-0.5 ${kdf === k.value ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-white/5 text-white/50 border border-transparent hover:bg-white/10"}`}
+                    >
+                      <span>{k.label}</span>
+                      <span className="text-[9px] text-white/20">{k.note}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
