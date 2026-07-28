@@ -1,28 +1,33 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Sidebar from "./components/Sidebar";
+import Sidebar, { type Tool } from "./components/Sidebar";
+import Welcome from "./components/Welcome";
 import ImageCompress from "./components/ImageCompress";
 import QrGenerator from "./components/QrGenerator";
 import ImageProcess from "./components/ImageProcess";
-import Welcome from "./components/Welcome";
+import AiToolsPage from "./components/AiToolsPage";
+import PrivacyPage from "./components/PrivacyPage";
+import EditingPage from "./components/EditingPage";
+import ConversionPage from "./components/ConversionPage";
+import BatchPage from "./components/BatchPage";
+import ErrorBoundary from "./components/ErrorBoundary";
 
-type Tool = "welcome" | "compress" | "qr" | "process";
+const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-const springTransition = { type: "spring", stiffness: 300, damping: 30 };
-
-export default function App() {
+function AppInner() {
   const [activeTool, setActiveTool] = useState<Tool>("welcome");
 
   const renderTool = () => {
     switch (activeTool) {
-      case "compress":
-        return <ImageCompress key="compress" />;
-      case "qr":
-        return <QrGenerator key="qr" />;
-      case "process":
-        return <ImageProcess key="process" />;
-      default:
-        return <Welcome key="welcome" onNavigate={setActiveTool} />;
+      case "ai": return <AiToolsPage key="ai" />;
+      case "privacy": return <PrivacyPage key="privacy" />;
+      case "editing": return <EditingPage key="editing" />;
+      case "compress": return <ImageCompress key="compress" />;
+      case "conversion": return <ConversionPage key="conversion" />;
+      case "qr": return <QrGenerator key="qr" />;
+      case "process": return <ImageProcess key="process" />;
+      case "batch": return <BatchPage key="batch" />;
+      default: return <Welcome key="welcome" onNavigate={setActiveTool} />;
     }
   };
 
@@ -31,18 +36,21 @@ export default function App() {
       <Sidebar activeTool={activeTool} onToolSelect={setActiveTool} />
       <main className="flex-1 overflow-auto p-6">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTool}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={springTransition}
-            className="h-full"
+          <motion.div key={activeTool} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }} transition={spring} className="h-full"
           >
             {renderTool()}
           </motion.div>
         </AnimatePresence>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }

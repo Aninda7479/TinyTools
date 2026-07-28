@@ -1,0 +1,181 @@
+import { useState, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
+import { Upload, X, Play } from "lucide-react";
+
+const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
+
+interface FileItem {
+  name: string;
+  path: string;
+  size: number;
+  preview?: string;
+}
+
+export default function ToolPage({
+  title,
+  description,
+  children,
+  onProcess,
+  processLabel,
+  multiFile = false,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  onProcess: (files: FileItem[]) => void;
+  processLabel?: string;
+  multiFile?: boolean;
+}) {
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = useCallback((fileList: FileList) => {
+    const newFiles = Array.from(fileList)
+      .filter((f) => f.type.startsWith("image/"))
+      .map((f) => ({
+        name: f.name,
+        path: (f as unknown as { path?: string }).path || "",
+        size: f.size,
+        preview: URL.createObjectURL(f),
+      }));
+    setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
+  }, [multiFile]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles]
+  );
+
+  return (
+    <div className="flex flex-col h-full gap-4">
+      <div>
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <p className="text-sm text-white/40 mt-1">{description}</p>
+      </div>
+
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Left: Options */}
+        <div className="w-[340px] flex flex-col gap-3 overflow-y-auto pr-1">{children}</div>
+
+        {/* Right: File + Preview */}
+        <div className="flex-1 flex flex-col gap-4">
+          <motion.div
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            animate={{
+              borderColor: isDragging ? "rgba(96,165,250,0.5)" : "rgba(255,255,255,0.1)",
+              backgroundColor: isDragging ? "rgba(96,165,250,0.05)" : "rgba(255,255,255,0.02)",
+            }}
+            transition={spring}
+            className="border-2 border-dashed rounded-2xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors min-h-[200px]"
+            onClick={() => inputRef.current?.click()}
+          >
+            {files.length > 0 ? (
+              <div className={`flex gap-3 flex-wrap ${multiFile ? "" : ""}`}>
+                {files.map((f, i) => (
+                  <div key={i} className="relative group">
+                    {f.preview && (
+                      <img src={f.preview} alt={f.name} className="w-24 h-24 rounded-xl object-cover" />
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 text-white/30" />
+                <p className="text-sm text-white/60">
+                  Drop {multiFile ? "images" : "an image"} here or click to browse
+                </p>
+              </>
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              multiple={multiFile}
+              className="hidden"
+              onChange={(e) => e.target.files && addFiles(e.target.files)}
+            />
+          </motion.div>
+
+          {files.length > 0 && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={spring}
+              onClick={() => onProcess(files)}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+            >
+              <Play className="w-4 h-4" />
+              {processLabel || `Process ${files.length} file${files.length > 1 ? "s" : ""}`}
+            </motion.button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function OptionRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-white/40 whitespace-nowrap">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+export function OptionSlider({ value, min, max, step, onChange }: {
+  value: number; min: number; max: number; step: number; onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-28 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-400"
+      />
+      <span className="text-xs text-white/40 w-8 text-right">
+        {Number.isInteger(value) ? value : value.toFixed(1)}
+      </span>
+    </div>
+  );
+}
+
+export function OptionSelect({ value, options, onChange }: {
+  value: string; options: { value: string; label: string }[]; onChange: (v: string) => void;
+}) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="bg-white/5 border border-border rounded-lg px-2 py-1 text-xs text-white/70"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  );
+}
+
+export function OptionToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!checked)}
+      className={`w-8 h-4 rounded-full transition-colors relative ${checked ? "bg-blue-500" : "bg-white/10"}`}
+    >
+      <div className="w-3 h-3 rounded-full bg-white absolute top-0.5"
+        style={{ transform: checked ? "translateX(16px)" : "translateX(2px)" }}
+      />
+    </button>
+  );
+}

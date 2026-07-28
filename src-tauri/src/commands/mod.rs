@@ -1,3 +1,9 @@
+pub mod ai_tools;
+pub mod batch;
+pub mod compression;
+pub mod editing;
+pub mod privacy;
+
 use qrcode::QrCode;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -38,12 +44,6 @@ pub fn compress_image(
             let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality);
             rgb.write_with_encoder(encoder).map_err(|e| e.to_string())?;
             std::fs::write(&output_path, buf.into_inner()).map_err(|e| e.to_string())?;
-        }
-        "png" => {
-            img.save(&output_path).map_err(|e| e.to_string())?;
-        }
-        "webp" => {
-            img.save(&output_path).map_err(|e| e.to_string())?;
         }
         _ => {
             img.save(&output_path).map_err(|e| e.to_string())?;
@@ -104,13 +104,12 @@ pub fn process_image(
     input_path: String,
     output_path: String,
     operation: String,
-    params: Option<String>,
+    _params: Option<String>,
 ) -> Result<ImageProcessResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
 
     match operation.as_str() {
         "resize" => {
-            let _params = params.unwrap_or_else(|| "{}".to_string());
             let resized = img.resize(800, 800, image::imageops::FilterType::Lanczos3);
             resized.save(&output_path).map_err(|e| e.to_string())?;
         }
