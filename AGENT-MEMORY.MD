@@ -183,9 +183,10 @@ Offline-first utility toolkit — no cloud, no Python, no ONNX runtime.
 - Types: `PeerInfo`, `PeerListResult`, `TransferInfo`, `SendResult`, `PortalResult`
 
 ### Key Pages
-- `App.tsx` — tool routing switch with `activeTool` + `activeSub` state, `handleNavigate(tool, sub?)` callback
+- `App.tsx` — tool routing switch with `activeTool` + `activeSub` state, `handleNavigate(tool, sub?)` callback. Routes `cat-*` sidebar types to CategoryPage.
 - `Welcome.tsx` — **redesigned**: 7 sections, 42 individual feature cards with `tag` badges, search across all cards. Each card navigates to specific sub-tool via `onNavigate(tool, sub)`
-- `Sidebar.tsx` — tool type union (includes `"p2p"`), `onToolSelect: (tool: Tool, sub?: string) => void`
+- `Sidebar.tsx` — 7 category icons matching Welcome page sections (Image, QR Code, PDF, Security, Encode/Decode, Hash, Share). Exports `sidebarCategories` array with full feature lists. Tool type union includes `"cat-image"`, `"cat-qr"`, `"cat-pdf"`, `"cat-security"`, `"cat-encode"`, `"cat-hash"`, `"cat-share"` for sidebar category pages.
+- `CategoryPage.tsx` — renders grouped feature grid for a sidebar category. Features grouped by `tag`, navigates to individual tools via `onNavigate(tool, sub?)`.
 - `P2PPage.tsx` — main P2P page with 3 tabs: Send, Receive, Web Portal
 - `P2PPeerList.tsx` — mDNS peer discovery list with Scan/Stop, auto-refresh 2s
 - `P2PTransferProgress.tsx` — progress bar with speed/ETA, polls every 500ms
@@ -283,6 +284,7 @@ npx tsc --noEmit
 ## In-Progress / Backlog
 - [x] P2P file sharing module — Phase 1 (local Wi-Fi transfer + web portal) + Phase 2 (password-protected encrypted transfers)
 - [x] Welcome page redesign — 7 sections, 42 individual feature cards with sub-tool navigation
+- [x] Sidebar redesign — 7 category icons matching Welcome page sections, CategoryPage for grouped tool browsing
 - [ ] P2P: Cross-network WebRTC transfers (Phase 3 — deferred, needs signaling server)
 - [ ] P2P: Pause/resume transfers
 - [ ] P2P: Chunked streaming sender (currently reads full file into memory before sending)
