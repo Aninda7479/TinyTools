@@ -90,7 +90,7 @@ pub fn add_watermark(
     let mut rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
 
-    let font_data = include_bytes!("C:\\Windows\\Fonts\\arial.ttf");
+    let font_data = include_bytes!("../../fonts/Inter.ttf");
     let font = FontRef::try_from_slice(font_data).map_err(|e| format!("Font load error: {}", e))?;
 
     let font_size = (w as f32 * 0.04).max(14.0).min(72.0);
