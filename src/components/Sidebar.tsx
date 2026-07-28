@@ -1,11 +1,11 @@
 import { motion } from "framer-motion";
 import {
-  Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode,
+  Sparkles, Brain, Shield, Scissors, Image, Image as ImageIcon, RefreshCw, QrCode,
   Wand2, Layers, FileText, Key, Binary, Hash, Lock, Radio,
   Paintbrush, Minimize, FileUp, Stamp, ArrowUpDown, RotateCw, Crop,
   Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
   Gauge, Zap, SplitSquareHorizontal, Combine, Palette,
-  ShieldCheck, FileLock,
+  ShieldCheck, FileLock, Film, Merge, Volume2
 } from "lucide-react";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -16,8 +16,8 @@ export type Tool =
   | "qr" | "pdf"
   | "privacy" | "password" | "encryption"
   | "encoder" | "hasher"
-  | "p2p"
-  | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share";
+  | "p2p" | "video"
+  | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share" | "cat-video";
 
 export interface Feature {
   icon: typeof Brain;
@@ -148,6 +148,32 @@ export const sidebarCategories: SidebarCategory[] = [
       { icon: Radio, title: "P2P Send", tag: "Network", tool: "p2p" },
       { icon: QrCode, title: "Web Portal", tag: "Network", tool: "p2p" },
       { icon: Lock, title: "Encrypted Transfer", tag: "Network", tool: "p2p" },
+    ],
+  },
+  {
+    id: "cat-video",
+    icon: Film,
+    label: "Video",
+    features: [
+      { icon: Info, title: "Video Info", tag: "Info", tool: "video", sub: "info" },
+      { icon: ArrowUpDown, title: "Compress", tag: "Compress", tool: "video", sub: "compress" },
+      { icon: ArrowUpDown, title: "Resize", tag: "Compress", tool: "video", sub: "resize" },
+      { icon: RefreshCw, title: "Aspect Ratio", tag: "Compress", tool: "video", sub: "aspect" },
+      { icon: Scissors, title: "Trim / Cut", tag: "Edit", tool: "video", sub: "trim" },
+      { icon: Merge, title: "Merge Clips", tag: "Edit", tool: "video", sub: "merge" },
+      { icon: Crop, title: "Crop Frame", tag: "Edit", tool: "video", sub: "crop" },
+      { icon: RotateCw, title: "Rotate", tag: "Edit", tool: "video", sub: "rotate" },
+      { icon: RefreshCw, title: "Mirror / Flip", tag: "Edit", tool: "video", sub: "mirror" },
+      { icon: Film, title: "Convert Format", tag: "Format", tool: "video", sub: "format" },
+      { icon: Volume2, title: "Extract Audio", tag: "Audio", tool: "video", sub: "extract-audio" },
+      { icon: Volume2, title: "Mute Video", tag: "Audio", tool: "video", sub: "mute" },
+      { icon: Volume2, title: "Replace Audio", tag: "Audio", tool: "video", sub: "replace-audio" },
+      { icon: ImageIcon, title: "Video → GIF", tag: "GIF", tool: "video", sub: "to-gif" },
+      { icon: Film, title: "GIF → Video", tag: "GIF", tool: "video", sub: "from-gif" },
+      { icon: Gauge, title: "Speed Control", tag: "Advanced", tool: "video", sub: "speed" },
+      { icon: Stamp, title: "Watermark", tag: "Advanced", tool: "video", sub: "watermark" },
+      { icon: Scissors, title: "Burn Subtitles", tag: "Advanced", tool: "video", sub: "subtitles" },
+      { icon: ImageIcon, title: "Frame Extract", tag: "Advanced", tool: "video", sub: "frames" },
     ],
   },
 ];

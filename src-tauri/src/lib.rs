@@ -116,6 +116,26 @@ pub fn run() {
             p2p::commands::start_receiving,
             p2p::commands::stop_receiving,
             p2p::commands::cleanup,
+            // Video Tools
+            commands::video_tools::get_video_info,
+            commands::video_tools::compress_video,
+            commands::video_tools::resize_video,
+            commands::video_tools::convert_aspect_ratio,
+            commands::video_tools::trim_video,
+            commands::video_tools::merge_videos,
+            commands::video_tools::crop_video,
+            commands::video_tools::rotate_video,
+            commands::video_tools::mirror_video,
+            commands::video_tools::convert_video_format,
+            commands::video_tools::extract_audio,
+            commands::video_tools::mute_video,
+            commands::video_tools::replace_audio,
+            commands::video_tools::video_to_gif,
+            commands::video_tools::gif_to_video,
+            commands::video_tools::change_speed,
+            commands::video_tools::add_video_watermark,
+            commands::video_tools::burn_subtitles,
+            commands::video_tools::extract_frames,
         ])
         .run(tauri::generate_context!())
         .expect("error while running TinyTools");

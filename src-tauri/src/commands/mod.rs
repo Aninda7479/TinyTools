@@ -8,6 +8,7 @@ pub mod hasher;
 pub mod password_tools;
 pub mod pdf_tools;
 pub mod privacy;
+pub mod video_tools;
 
 use qrcode::QrCode;
 use serde::{Deserialize, Serialize};

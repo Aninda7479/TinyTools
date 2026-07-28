@@ -379,3 +379,74 @@ export async function encryptFileChacha(inputPath: string, outputPath: string, p
 export async function decryptFileChacha(inputPath: string, outputPath: string, passphrase: string): Promise<string> {
   return invoke<string>("decrypt_file_chacha", { inputPath, outputPath, passphrase });
 }
+
+// ── Video Tools ────────────────────────────────────────────────
+export interface VideoInfo {
+  duration: number;
+  width: number;
+  height: number;
+  codec: string;
+  audio_codec: string;
+  bitrate: number;
+  fps: number;
+  file_size: number;
+  format: string;
+}
+
+export async function getVideoInfo(input: string): Promise<ToolResult> {
+  return invoke<ToolResult>("get_video_info", { input });
+}
+export async function compressVideo(input: string, quality: number, targetSizeKb?: number): Promise<ToolResult> {
+  return invoke<ToolResult>("compress_video", { input, quality, targetSizeKb: targetSizeKb ?? null });
+}
+export async function resizeVideo(input: string, width: number, height: number): Promise<ToolResult> {
+  return invoke<ToolResult>("resize_video", { input, width, height });
+}
+export async function convertAspectRatio(input: string, target: string): Promise<ToolResult> {
+  return invoke<ToolResult>("convert_aspect_ratio", { input, target });
+}
+export async function trimVideo(input: string, start: number, end: number): Promise<ToolResult> {
+  return invoke<ToolResult>("trim_video", { input, start, end });
+}
+export async function mergeVideos(inputs: string[], outputDir: string): Promise<ToolResult> {
+  return invoke<ToolResult>("merge_videos", { inputs, outputDir });
+}
+export async function cropVideo(input: string, x: number, y: number, width: number, height: number): Promise<ToolResult> {
+  return invoke<ToolResult>("crop_video", { input, x, y, width, height });
+}
+export async function rotateVideo(input: string, angle: number): Promise<ToolResult> {
+  return invoke<ToolResult>("rotate_video", { input, angle });
+}
+export async function mirrorVideo(input: string, direction: string): Promise<ToolResult> {
+  return invoke<ToolResult>("mirror_video", { input, direction });
+}
+export async function convertVideoFormat(input: string, format: string): Promise<ToolResult> {
+  return invoke<ToolResult>("convert_video_format", { input, format });
+}
+export async function extractAudio(input: string, format: string): Promise<ToolResult> {
+  return invoke<ToolResult>("extract_audio", { input, format });
+}
+export async function muteVideo(input: string): Promise<ToolResult> {
+  return invoke<ToolResult>("mute_video", { input });
+}
+export async function replaceAudio(video: string, audio: string): Promise<ToolResult> {
+  return invoke<ToolResult>("replace_audio", { video, audio });
+}
+export async function videoToGif(input: string, fps: number, width: number): Promise<ToolResult> {
+  return invoke<ToolResult>("video_to_gif", { input, fps, width });
+}
+export async function gifToVideo(input: string): Promise<ToolResult> {
+  return invoke<ToolResult>("gif_to_video", { input });
+}
+export async function changeSpeed(input: string, speed: number): Promise<ToolResult> {
+  return invoke<ToolResult>("change_speed", { input, speed });
+}
+export async function addVideoWatermark(input: string, text: string, position: string, fontSize: number): Promise<ToolResult> {
+  return invoke<ToolResult>("add_video_watermark", { input, text, position, fontSize });
+}
+export async function burnSubtitles(input: string, subtitlePath: string): Promise<ToolResult> {
+  return invoke<ToolResult>("burn_subtitles", { input, subtitlePath });
+}
+export async function extractFrames(input: string, outputDir: string, timestamp?: number): Promise<ToolResult> {
+  return invoke<ToolResult>("extract_frames", { input, outputDir, timestamp: timestamp ?? null });
+}

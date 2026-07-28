@@ -17,6 +17,7 @@ import EncoderDecoderPage from "./components/EncoderDecoderPage";
 import HasherPage from "./components/HasherPage";
 import EncryptionPage from "./components/EncryptionPage";
 import P2PPage from "./components/P2PPage";
+import VideoToolsPage from "./components/VideoToolsPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -55,6 +56,7 @@ function AppInner() {
       case "hasher": return <HasherPage key="hasher" defaultSub={activeSub} />;
       case "encryption": return <EncryptionPage key="encryption" defaultSub={activeSub} />;
       case "p2p": return <P2PPage key="p2p" />;
+      case "video": return <VideoToolsPage key="video" defaultSub={activeSub} />;
       default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }
   };
