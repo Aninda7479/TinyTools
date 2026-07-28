@@ -1,11 +1,12 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, Wand2, X } from "lucide-react";
+import { processImage } from "../lib/tauri";
 
 const springTransition = { type: "spring", stiffness: 300, damping: 30 };
 
 const operations = [
-  { id: "resize", label: "Resize", description: "Scale to 800x800" },
+  { id: "resize", label: "Resize", description: "Scale to fit within bounds" },
   { id: "grayscale", label: "Grayscale", description: "Convert to grayscale" },
   { id: "rotate", label: "Rotate 90°", description: "Rotate clockwise" },
   { id: "flip", label: "Flip Horizontal", description: "Mirror horizontally" },
@@ -23,6 +24,11 @@ export default function ImageProcess() {
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [selectedOp, setSelectedOp] = useState("resize");
   const [isDragging, setIsDragging] = useState(false);
+  const [status, setStatus] = useState("");
+  const [resizeW, setResizeW] = useState(800);
+  const [resizeH, setResizeH] = useState(800);
+  const [blurSigma, setBlurSigma] = useState(3.0);
+  const [sharpenAmount, setSharpenAmount] = useState(1.0);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -40,6 +46,26 @@ export default function ImageProcess() {
       });
     }
   }, []);
+
+  const handleApply = async () => {
+    if (!file) return;
+    setStatus("Processing...");
+    try {
+      const outPath = file.name.replace(/\.[^.]+$/, `_${selectedOp}.png`);
+      let params: Record<string, unknown> = {};
+      switch (selectedOp) {
+        case "resize": params = { width: resizeW, height: resizeH }; break;
+        case "blur": params = { sigma: blurSigma }; break;
+        case "sharpen": params = { amount: sharpenAmount, radius: 1 }; break;
+        case "rotate": params = { degrees: 90 }; break;
+        case "flip": params = { direction: "horizontal" }; break;
+      }
+      const result = await processImage(file.name, outPath, selectedOp, params);
+      setStatus(result.message);
+    } catch (e) {
+      setStatus(`Error: ${e}`);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full gap-6">
@@ -149,12 +175,48 @@ export default function ImageProcess() {
             </motion.button>
           ))}
 
+          {selectedOp === "resize" && (
+            <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/5 border border-border">
+              <label className="text-xs text-white/40">Max Width
+                <input type="number" value={resizeW} onChange={e => setResizeW(Number(e.target.value))} min={1}
+                  className="mt-1 w-full bg-white/5 border border-border rounded-lg px-2 py-1 text-xs text-white/80 outline-none" />
+              </label>
+              <label className="text-xs text-white/40">Max Height
+                <input type="number" value={resizeH} onChange={e => setResizeH(Number(e.target.value))} min={1}
+                  className="mt-1 w-full bg-white/5 border border-border rounded-lg px-2 py-1 text-xs text-white/80 outline-none" />
+              </label>
+            </div>
+          )}
+
+          {selectedOp === "blur" && (
+            <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/5 border border-border">
+              <label className="text-xs text-white/40">Sigma
+                <input type="number" value={blurSigma} onChange={e => setBlurSigma(Number(e.target.value))} min={0.1} max={20} step={0.5}
+                  className="mt-1 w-full bg-white/5 border border-border rounded-lg px-2 py-1 text-xs text-white/80 outline-none" />
+              </label>
+            </div>
+          )}
+
+          {selectedOp === "sharpen" && (
+            <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/5 border border-border">
+              <label className="text-xs text-white/40">Amount
+                <input type="number" value={sharpenAmount} onChange={e => setSharpenAmount(Number(e.target.value))} min={0.1} max={5} step={0.1}
+                  className="mt-1 w-full bg-white/5 border border-border rounded-lg px-2 py-1 text-xs text-white/80 outline-none" />
+              </label>
+            </div>
+          )}
+
+          {status && (
+            <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">{status}</div>
+          )}
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={springTransition}
             disabled={!file}
             className="mt-auto flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            onClick={handleApply}
           >
             <Wand2 className="w-4 h-4" />
             Apply

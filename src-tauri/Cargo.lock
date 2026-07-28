@@ -4949,6 +4949,7 @@ dependencies = [
 name = "tinytools"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
  "adler",
  "aes-gcm",
  "argon2",

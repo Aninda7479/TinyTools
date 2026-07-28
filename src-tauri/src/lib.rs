@@ -16,8 +16,8 @@ pub fn run() {
             commands::ai_tools::remove_background,
             commands::ai_tools::inpaint_image,
             commands::ai_tools::upscale_image,
-            commands::ai_tools::colorize_image,
-            commands::ai_tools::face_enhance,
+            commands::ai_tools::sepia_filter,
+            commands::ai_tools::smart_sharpen,
             commands::ai_tools::depth_blur,
             // Privacy
             commands::privacy::strip_metadata,
@@ -51,6 +51,7 @@ pub fn run() {
             commands::pdf_tools::extract_text,
             commands::pdf_tools::encrypt_pdf,
             commands::pdf_tools::decrypt_pdf,
+            commands::pdf_tools::unwrap_pdf,
             commands::pdf_tools::compress_pdf,
             commands::pdf_tools::flatten_pdf,
             commands::pdf_tools::add_pdf_watermark,

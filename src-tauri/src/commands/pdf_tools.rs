@@ -491,42 +491,82 @@ pub fn extract_text(input_path: String) -> Result<ToolResult, String> {
 }
 
 // ═══════════════════════════════════════
-// Encrypt PDF
+// Encrypt PDF (AES-256-GCM file-level)
 // ═══════════════════════════════════════
 
 #[tauri::command]
-pub fn encrypt_pdf(input_path: String, output_path: String, user_password: String, owner_password: String) -> Result<ToolResult, String> {
-    let mut doc = open_doc(&input_path)?;
+pub fn encrypt_pdf(input_path: String, output_path: String, user_password: String, _owner_password: String) -> Result<ToolResult, String> {
+    use aes_gcm::{Aes256Gcm, KeyInit, AeadCore};
+    use aes_gcm::aead::Aead;
+    use rand::RngCore;
+    use rand::rngs::OsRng;
 
-    let mut o_key = vec![0u8; 32];
-    let mut u_key = vec![0u8; 32];
-    for (i, b) in owner_password.bytes().enumerate().take(32) { o_key[i] = b; }
-    for (i, b) in user_password.bytes().enumerate().take(32) { u_key[i] = b; }
+    let pdf_bytes = std::fs::read(&input_path).map_err(|e| format!("Failed to read PDF: {}", e))?;
 
-    let enc_id = doc.add_object(Object::Dictionary(dictionary! {
-        b"Filter" => Object::Name(b"Standard".to_vec()),
-        b"V" => Object::Integer(1),
-        b"R" => Object::Integer(2),
-        b"Length" => Object::Integer(40),
-        b"O" => Object::String(o_key, StringFormat::Literal),
-        b"U" => Object::String(u_key, StringFormat::Literal),
-        b"P" => Object::Integer(-4),
-    }));
-    doc.trailer.set("Encrypt", Object::Reference(enc_id));
-    doc.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "PDF encrypted (structure applied)".into() })
+    let salt = {
+        let mut s = [0u8; 16];
+        OsRng.fill_bytes(&mut s);
+        s
+    };
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+
+    let mut key = [0u8; 32];
+    argon2::Argon2::default()
+        .hash_password_into(user_password.as_bytes(), &salt, &mut key)
+        .map_err(|e| format!("Argon2 KDF error: {}", e))?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let ciphertext = cipher.encrypt(&nonce, pdf_bytes.as_ref()).map_err(|e| format!("Encryption failed: {}", e))?;
+
+    let mut out = Vec::new();
+    out.extend_from_slice(b"TTENC1");
+    out.extend_from_slice(&salt);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&(pdf_bytes.len() as u64).to_le_bytes());
+    out.extend_from_slice(&ciphertext);
+    std::fs::write(&output_path, &out).map_err(|e| format!("Failed to write: {}", e))?;
+    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("PDF encrypted with AES-256-GCM ({} KB)", pdf_bytes.len() / 1024) })
 }
 
 // ═══════════════════════════════════════
-// Decrypt PDF
+// Decrypt PDF (AES-256-GCM file-level)
 // ═══════════════════════════════════════
 
 #[tauri::command]
-pub fn decrypt_pdf(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    let mut doc = open_doc(&input_path)?;
-    doc.trailer.remove(b"Encrypt");
-    doc.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Encryption metadata removed".into() })
+pub fn decrypt_pdf(input_path: String, output_path: String, password: String) -> Result<ToolResult, String> {
+    use aes_gcm::{Aes256Gcm, KeyInit};
+    use aes_gcm::aead::Aead;
+    use aes_gcm::aead::generic_array::GenericArray;
+
+    let data = std::fs::read(&input_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    if data.len() < 38 || &data[..6] != b"TTENC1" {
+        return Err("Not an encrypted TinyTools PDF (missing TTENC1 header)".into());
+    }
+    let salt = &data[6..22];
+    let nonce = &data[22..34];
+    let orig_size = u64::from_le_bytes(data[34..42].try_into().unwrap()) as usize;
+    let ciphertext = &data[42..];
+
+    let mut key = [0u8; 32];
+    argon2::Argon2::default()
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|e| format!("Argon2 KDF error: {}", e))?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let nonce_ref = GenericArray::from_slice(nonce);
+    let plaintext = cipher.decrypt(nonce_ref, ciphertext).map_err(|_| "Decryption failed: wrong password or corrupted data".to_string())?;
+    if plaintext.len() != orig_size {
+        return Err("Decryption integrity check failed".into());
+    }
+    std::fs::write(&output_path, &plaintext).map_err(|e| format!("Failed to write: {}", e))?;
+    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("PDF decrypted ({} KB)", plaintext.len() / 1024) })
+}
+
+// ═══════════════════════════════════════
+// Unwrap PDF (decrypt from TTENC1 wrapper)
+// ═══════════════════════════════════════
+
+#[tauri::command]
+pub fn unwrap_pdf(input_path: String, output_path: String, password: String) -> Result<ToolResult, String> {
+    decrypt_pdf(input_path, output_path, password)
 }
 
 // ═══════════════════════════════════════

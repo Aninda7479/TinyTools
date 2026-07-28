@@ -8,7 +8,7 @@ import {
 import {
   getPdfInfo, mergePdfs, splitPdf, reorderPages, rotatePages,
   cropPages, deletePages, imagesToPdf, extractPdfText,
-  encryptPdf, decryptPdf, compressPdf, flattenPdf,
+  encryptPdf, decryptPdf, unwrapPdf, compressPdf, flattenPdf,
   addPdfWatermark, addPageNumbers
 } from "../lib/tauri";
 import type { ToolResult } from "../lib/tauri";
@@ -17,7 +17,7 @@ const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
 type PdfTool =
   | "select" | "info" | "merge" | "split" | "reorder" | "rotate"
-  | "crop" | "delete" | "img2pdf" | "text" | "encrypt" | "decrypt"
+  | "crop" | "delete" | "img2pdf" | "text" | "encrypt" | "decrypt" | "unwrap"
   | "compress" | "flatten" | "watermark" | "pagenum";
 
 interface ToolCard {
@@ -39,7 +39,8 @@ const tools: ToolCard[] = [
   { id: "img2pdf", icon: ImagePlus, title: "Images to PDF", description: "Convert images to PDF", category: "Convert" },
   { id: "text", icon: FileText, title: "Extract Text", description: "Extract text content", category: "Convert" },
   { id: "encrypt", icon: Lock, title: "Encrypt PDF", description: "Password protect", category: "Security" },
-  { id: "decrypt", icon: Unlock, title: "Decrypt PDF", description: "Remove password", category: "Security" },
+  { id: "decrypt", icon: Unlock, title: "Decrypt PDF", description: "Remove password protection", category: "Security" },
+  { id: "unwrap", icon: Unlock, title: "Unwrap PDF", description: "Decrypt TTENC1-wrapped PDF", category: "Security" },
   { id: "compress", icon: Minimize2, title: "Compress PDF", description: "Reduce file size", category: "Enhance" },
   { id: "flatten", icon: Minimize2, title: "Flatten PDF", description: "Remove form fields", category: "Enhance" },
   { id: "watermark", icon: Stamp, title: "Watermark", description: "Add text watermark overlay", category: "Enhance" },
@@ -211,6 +212,17 @@ export default function PdfToolsPage() {
             </label>
           </>
         );
+      case "decrypt":
+      case "unwrap":
+        return (
+          <>
+            <label className="text-xs text-white/40">Password
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
+            </label>
+            <p className="text-xs text-white/30">{tool === "unwrap" ? "Decrypt a TinyTools TTENC1-wrapped PDF" : "Decrypt a TinyTools-encrypted PDF"}</p>
+          </>
+        );
       case "watermark":
         return (
           <>
@@ -293,7 +305,9 @@ export default function PdfToolsPage() {
       case "encrypt":
         return run(() => encryptPdf(paths[0], outPath("encrypted.pdf"), password, ownerPassword || password));
       case "decrypt":
-        return run(() => decryptPdf(paths[0], outPath("decrypted.pdf")));
+        return run(() => decryptPdf(paths[0], outPath("decrypted.pdf"), password));
+      case "unwrap":
+        return run(() => unwrapPdf(paths[0], outPath("unwrapped.pdf"), password));
       case "compress":
         return run(() => compressPdf(paths[0], outPath("compressed.pdf")));
       case "flatten":

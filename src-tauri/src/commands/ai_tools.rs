@@ -280,35 +280,60 @@ pub fn upscale_image(input_path: String, output_path: String, scale: u32) -> Res
 }
 
 #[tauri::command]
-pub fn colorize_image(input_path: String, output_path: String) -> Result<ToolResult, String> {
+pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let gray = img.grayscale();
-    let rgba = gray.to_rgba8();
+    let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let mut out = RgbaImage::new(w, h);
 
     for y in 0..h {
         for x in 0..w {
             let p = *rgba.get_pixel(x, y);
-            let v = p[0] as f64 / 255.0;
-            let r = (v * 255.0 * 1.1).min(255.0) as u8;
-            let g = (v * 255.0 * 0.9).min(255.0) as u8;
-            let b = (v * 255.0 * 0.7).min(255.0) as u8;
-            out.put_pixel(x, y, Rgba([r, g, b, 255]));
+            let r = p[0] as f64;
+            let g = p[1] as f64;
+            let b = p[2] as f64;
+            let sr = (0.393 * r + 0.769 * g + 0.189 * b).min(255.0) as u8;
+            let sg = (0.349 * r + 0.686 * g + 0.168 * b).min(255.0) as u8;
+            let sb = (0.272 * r + 0.534 * g + 0.131 * b).min(255.0) as u8;
+            out.put_pixel(x, y, Rgba([sr, sg, sb, 255]));
         }
     }
 
     out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Colorization applied".into() })
+    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Sepia filter applied".into() })
 }
 
 #[tauri::command]
-pub fn face_enhance(input_path: String, output_path: String, strength: f32) -> Result<ToolResult, String> {
+pub fn smart_sharpen(input_path: String, output_path: String, strength: f32) -> Result<ToolResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let denoised = img.blur(strength * 0.5);
-    let enhanced = denoised.unsharpen(strength, 1);
-    enhanced.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Face enhancement applied".into() })
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+
+    let blurred = img.blur(strength * 0.3);
+    let blur_rgba = blurred.to_rgba8();
+    let mut out = RgbaImage::new(w, h);
+
+    let amount = (strength as f64).clamp(0.1, 5.0);
+
+    for y in 0..h {
+        for x in 0..w {
+            let orig = *rgba.get_pixel(x, y);
+            let blur_p = *blur_rgba.get_pixel(x, y);
+            let orig_lum = 0.299 * orig[0] as f64 + 0.587 * orig[1] as f64 + 0.114 * orig[2] as f64;
+            let blur_lum = 0.299 * blur_p[0] as f64 + 0.587 * blur_p[1] as f64 + 0.114 * blur_p[2] as f64;
+            let detail = orig_lum - blur_lum;
+            let edge_strength = (detail.abs() / 50.0).min(1.0);
+            let sharpen = amount * (0.5 + 0.5 * edge_strength);
+
+            let r = (orig[0] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
+            let g = (orig[1] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
+            let b = (orig[2] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
+            out.put_pixel(x, y, Rgba([r, g, b, orig[3]]));
+        }
+    }
+
+    out.save(&output_path).map_err(|e| e.to_string())?;
+    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Smart sharpen applied (strength: {})", strength) })
 }
 
 #[tauri::command]

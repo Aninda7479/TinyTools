@@ -109,13 +109,19 @@ pub fn process_image(
     input_path: String,
     output_path: String,
     operation: String,
-    _params: Option<String>,
+    params: Option<String>,
 ) -> Result<ImageProcessResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
+    let parsed: serde_json::Value = params
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or(serde_json::Value::Null);
 
     match operation.as_str() {
         "resize" => {
-            let resized = img.resize(800, 800, image::imageops::FilterType::Lanczos3);
+            let max_w = parsed["width"].as_u64().unwrap_or(800) as u32;
+            let max_h = parsed["height"].as_u64().unwrap_or(800) as u32;
+            let resized = img.resize(max_w, max_h, image::imageops::FilterType::Lanczos3);
             resized.save(&output_path).map_err(|e| e.to_string())?;
         }
         "grayscale" => {
@@ -123,19 +129,29 @@ pub fn process_image(
             gray.save(&output_path).map_err(|e| e.to_string())?;
         }
         "rotate" => {
-            let rotated = img.rotate90();
+            let degrees = parsed["degrees"].as_u64().unwrap_or(90);
+            let rotated = match degrees % 360 {
+                90 => img.rotate90(),
+                180 => img.rotate180(),
+                270 => img.rotate270(),
+                _ => img.rotate90(),
+            };
             rotated.save(&output_path).map_err(|e| e.to_string())?;
         }
         "flip" => {
-            let flipped = img.fliph();
+            let direction = parsed["direction"].as_str().unwrap_or("horizontal");
+            let flipped = if direction == "vertical" { img.flipv() } else { img.fliph() };
             flipped.save(&output_path).map_err(|e| e.to_string())?;
         }
         "blur" => {
-            let blurred = img.blur(3.0);
+            let sigma = parsed["sigma"].as_f64().unwrap_or(3.0) as f32;
+            let blurred = img.blur(sigma);
             blurred.save(&output_path).map_err(|e| e.to_string())?;
         }
         "sharpen" => {
-            let sharpened = img.unsharpen(1.0, 1);
+            let amount = parsed["amount"].as_f64().unwrap_or(1.0) as f32;
+            let radius = parsed["radius"].as_i64().unwrap_or(1) as u32;
+            let sharpened = img.unsharpen(amount, radius as i32);
             sharpened.save(&output_path).map_err(|e| e.to_string())?;
         }
         _ => {

@@ -1,15 +1,15 @@
 import { useState } from "react";
 import ToolPage, { OptionRow, OptionSlider } from "./ToolPage";
-import { removeBackground, inpaintImage, upscaleImage, colorizeImage, faceEnhance, depthBlur } from "../lib/tauri";
+import { removeBackground, inpaintImage, upscaleImage, sepiaFilter, smartSharpen, depthBlur } from "../lib/tauri";
 
-type AiTool = "bg-remove" | "inpaint" | "upscale" | "colorize" | "face-enhance" | "depth-blur";
+type AiTool = "bg-remove" | "inpaint" | "upscale" | "sepia" | "smart-sharpen" | "depth-blur";
 
 const tools: { id: AiTool; label: string; description: string }[] = [
   { id: "bg-remove", label: "Background Removal", description: "Remove backgrounds → transparent PNG" },
   { id: "inpaint", label: "Object Removal", description: "Erase unwanted objects or text" },
   { id: "upscale", label: "AI Upscale", description: "Increase resolution 2x or 4x" },
-  { id: "colorize", label: "Colorize", description: "Add color to B&W photos" },
-  { id: "face-enhance", label: "Face Enhancement", description: "Fix blurry or pixelated faces" },
+  { id: "sepia", label: "Sepia Filter", description: "Vintage sepia tone effect" },
+  { id: "smart-sharpen", label: "Smart Sharpen", description: "Edge-aware detail enhancement" },
   { id: "depth-blur", label: "Depth Blur", description: "DSLR-style bokeh background blur" },
 ];
 
@@ -17,8 +17,7 @@ export default function AiToolsPage() {
   const [selectedTool, setSelectedTool] = useState<AiTool>("bg-remove");
   const [scale, setScale] = useState(2);
   const [blurStrength, setBlurStrength] = useState(8.0);
-  const [faceStrength, setFaceStrength] = useState(1.0);
-  const [status, setStatus] = useState("");
+  const [faceStrength, setFaceStrength] = useState(1.0);  const [status, setStatus] = useState("");
 
   const handleProcess = async (files: { name: string; path: string }[]) => {
     const f = files[0];
@@ -31,8 +30,8 @@ export default function AiToolsPage() {
         case "bg-remove": result = await removeBackground(f.path, out); break;
         case "inpaint": result = await inpaintImage(f.path, out, [[10, 10, 50, 50]]); break;
         case "upscale": result = await upscaleImage(f.path, out, scale); break;
-        case "colorize": result = await colorizeImage(f.path, out); break;
-        case "face-enhance": result = await faceEnhance(f.path, out, faceStrength); break;
+        case "sepia": result = await sepiaFilter(f.path, out); break;
+        case "smart-sharpen": result = await smartSharpen(f.path, out, faceStrength); break;
         case "depth-blur": result = await depthBlur(f.path, out, blurStrength); break;
       }
       setStatus(result?.message || "Done");
@@ -81,7 +80,7 @@ export default function AiToolsPage() {
         </div>
       )}
 
-      {selectedTool === "face-enhance" && (
+      {selectedTool === "smart-sharpen" && (
         <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border">
           <OptionRow label="Strength">
             <OptionSlider value={faceStrength} min={0.5} max={3} step={0.1} onChange={setFaceStrength} />

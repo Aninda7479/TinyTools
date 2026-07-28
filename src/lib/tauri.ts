@@ -21,7 +21,9 @@ export interface BatchResult {
   message: string;
 }
 
-// AI Tools
+export async function processImage(input: string, output: string, operation: string, params?: Record<string, unknown>): Promise<ToolResult> {
+  return invoke<ToolResult>("process_image", { inputPath: input, outputPath: output, operation, params: params ? JSON.stringify(params) : null });
+}
 export async function removeBackground(input: string, output: string): Promise<ToolResult> {
   return invoke<ToolResult>("remove_background", { inputPath: input, outputPath: output });
 }
@@ -31,11 +33,11 @@ export async function inpaintImage(input: string, output: string, regions: [numb
 export async function upscaleImage(input: string, output: string, scale: number): Promise<ToolResult> {
   return invoke<ToolResult>("upscale_image", { inputPath: input, outputPath: output, scale });
 }
-export async function colorizeImage(input: string, output: string): Promise<ToolResult> {
-  return invoke<ToolResult>("colorize_image", { inputPath: input, outputPath: output });
+export async function sepiaFilter(input: string, output: string): Promise<ToolResult> {
+  return invoke<ToolResult>("sepia_filter", { inputPath: input, outputPath: output });
 }
-export async function faceEnhance(input: string, output: string, strength: number): Promise<ToolResult> {
-  return invoke<ToolResult>("face_enhance", { inputPath: input, outputPath: output, strength });
+export async function smartSharpen(input: string, output: string, strength: number): Promise<ToolResult> {
+  return invoke<ToolResult>("smart_sharpen", { inputPath: input, outputPath: output, strength });
 }
 export async function depthBlur(input: string, output: string, blurStrength: number): Promise<ToolResult> {
   return invoke<ToolResult>("depth_blur", { inputPath: input, outputPath: output, blurStrength });
@@ -50,6 +52,9 @@ export async function redactRegions(input: string, output: string, regions: [num
 }
 export async function addWatermark(input: string, output: string, text: string, opacity: number, position: string): Promise<ToolResult> {
   return invoke<ToolResult>("add_watermark", { inputPath: input, outputPath: output, text, opacity, position });
+}
+export async function addImageWatermark(input: string, watermark: string, output: string, opacity: number, scale: number, position?: string): Promise<ToolResult> {
+  return invoke<ToolResult>("add_image_watermark", { inputPath: input, watermarkPath: watermark, outputPath: output, opacity, scale, position: position ?? null });
 }
 
 // Editing
@@ -125,8 +130,11 @@ export async function extractPdfText(input: string): Promise<ToolResult> {
 export async function encryptPdf(input: string, output: string, userPassword: string, ownerPassword: string): Promise<ToolResult> {
   return invoke<ToolResult>("encrypt_pdf", { inputPath: input, outputPath: output, userPassword, ownerPassword });
 }
-export async function decryptPdf(input: string, output: string): Promise<ToolResult> {
-  return invoke<ToolResult>("decrypt_pdf", { inputPath: input, outputPath: output });
+export async function decryptPdf(input: string, output: string, password: string): Promise<ToolResult> {
+  return invoke<ToolResult>("decrypt_pdf", { inputPath: input, outputPath: output, password });
+}
+export async function unwrapPdf(input: string, output: string, password: string): Promise<ToolResult> {
+  return invoke<ToolResult>("unwrap_pdf", { inputPath: input, outputPath: output, password });
 }
 export async function compressPdf(input: string, output: string): Promise<ToolResult> {
   return invoke<ToolResult>("compress_pdf", { inputPath: input, outputPath: output });

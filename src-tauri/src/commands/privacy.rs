@@ -1,7 +1,5 @@
 use image::Rgba;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::io::BufReader;
 
 #[derive(Serialize, Deserialize)]
 pub struct ToolResult {
@@ -12,35 +10,12 @@ pub struct ToolResult {
 
 #[tauri::command]
 pub fn strip_metadata(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    // Re-save image without metadata by decoding and encoding fresh
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     img.save(&output_path).map_err(|e| e.to_string())?;
-
-    // Remove EXIF if output is JPEG
-    let ext = std::path::Path::new(&output_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-
-    if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
-        // Re-read and write without EXIF using exif crate
-        match fs::File::open(&output_path) {
-            Ok(f) => {
-                let mut buf = BufReader::new(f);
-                let exif = exif::Reader::new().read_from_container(&mut buf);
-                if exif.is_ok() {
-                    // For now, the image crate strips EXIF on re-save
-                    // This is already handled by the decode/encode above
-                }
-            }
-            _ => {}
-        }
-    }
-
     Ok(ToolResult {
         success: true,
         output_path: Some(output_path),
-        message: "Metadata stripped".into(),
+        message: "Metadata stripped (re-encoded without EXIF)".into(),
     })
 }
 
@@ -109,35 +84,57 @@ pub fn add_watermark(
     opacity: u8,
     position: String,
 ) -> Result<ToolResult, String> {
+    use ab_glyph::{FontRef, PxScale, Font, ScaleFont};
+
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     let mut rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
 
-    // Simple text watermark using pixel-level rendering
-    // Draw semi-transparent rectangles as watermark blocks
-    let block_w = (text.len() as u32) * 8;
-    let block_h = 12u32;
+    let font_data = include_bytes!("C:\\Windows\\Fonts\\arial.ttf");
+    let font = FontRef::try_from_slice(font_data).map_err(|e| format!("Font load error: {}", e))?;
+
+    let font_size = (w as f32 * 0.04).max(14.0).min(72.0);
+    let scale = PxScale::from(font_size);
+
+    let mut text_width = 0.0f32;
+    for ch in text.chars() {
+        let glyph_id = font.glyph_id(ch);
+        text_width += font.as_scaled(scale).h_advance(glyph_id);
+    }
+    let text_height = font_size * 1.2;
+
     let (bx, by) = match position.as_str() {
-        "top-left" => (10, 10),
-        "top-right" => (w.saturating_sub(block_w + 10), 10),
-        "bottom-left" => (10, h.saturating_sub(block_h + 10)),
-        "center" => ((w - block_w) / 2, (h - block_h) / 2),
-        _ => (w.saturating_sub(block_w + 10), h.saturating_sub(block_h + 10)),
+        "top-left" => (16.0, 16.0),
+        "top-right" => ((w as f32 - text_width - 16.0).max(0.0), 16.0),
+        "bottom-left" => (16.0, (h as f32 - text_height - 16.0).max(0.0)),
+        "center" => ((w as f32 - text_width) / 2.0, (h as f32 - text_height) / 2.0),
+        _ => ((w as f32 - text_width - 16.0).max(0.0), (h as f32 - text_height - 16.0).max(0.0)),
     };
 
-    for y in by..(by + block_h).min(h) {
-        for x in bx..(bx + block_w).min(w) {
-            let p = *rgba.get_pixel(x, y);
-            let blend = opacity as f64 / 255.0;
-            let r = (p[0] as f64 * (1.0 - blend) + 255.0 * blend) as u8;
-            let g = (p[1] as f64 * (1.0 - blend) + 255.0 * blend) as u8;
-            let b = (p[2] as f64 * (1.0 - blend) + 255.0 * blend) as u8;
-            rgba.put_pixel(x, y, Rgba([r, g, b, 255]));
+    let mut cursor_x = bx;
+    for ch in text.chars() {
+        let glyph_id = font.glyph_id(ch);
+        let glyph = glyph_id.with_scale_and_position(scale, ab_glyph::point(cursor_x, by + font_size * 0.85));
+        if let Some(outlined) = font.outline_glyph(glyph) {
+            let bounds = outlined.px_bounds();
+            outlined.draw(|px, py, coverage| {
+                let img_x = bounds.min.x as i32 + px as i32;
+                let img_y = bounds.min.y as i32 + py as i32;
+                if img_x >= 0 && img_y >= 0 && (img_x as u32) < w && (img_y as u32) < h {
+                    let blend = (coverage * opacity as f32 / 255.0).min(1.0);
+                    let p = *rgba.get_pixel(img_x as u32, img_y as u32);
+                    let r = (p[0] as f32 * (1.0 - blend) + 255.0 * blend) as u8;
+                    let g = (p[1] as f32 * (1.0 - blend) + 255.0 * blend) as u8;
+                    let b = (p[2] as f32 * (1.0 - blend) + 255.0 * blend) as u8;
+                    rgba.put_pixel(img_x as u32, img_y as u32, Rgba([r, g, b, 255]));
+                }
+            });
         }
+        cursor_x += font.as_scaled(scale).h_advance(glyph_id);
     }
 
     rgba.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Watermark added".into() })
+    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Watermark '{}' rendered at {}", text, position) })
 }
 
 #[tauri::command]
@@ -147,6 +144,7 @@ pub fn add_image_watermark(
     output_path: String,
     opacity: u8,
     scale: f32,
+    position: Option<String>,
 ) -> Result<ToolResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     let wm = image::open(&watermark_path).map_err(|e| e.to_string())?;
@@ -159,9 +157,15 @@ pub fn add_image_watermark(
     let wm_resized = wm.resize(wm_new_w, wm_new_h, image::imageops::FilterType::Lanczos3);
     let wm_rgba = wm_resized.to_rgba8();
 
-    // Position at bottom-right
-    let ox = w.saturating_sub(wm_rgba.width() + 10);
-    let oy = h.saturating_sub(wm_rgba.height() + 10);
+    let pos = position.as_deref().unwrap_or("bottom-right");
+    let margin = 10u32;
+    let (ox, oy) = match pos {
+        "top-left" => (margin, margin),
+        "top-right" => (w.saturating_sub(wm_rgba.width() + margin), margin),
+        "bottom-left" => (margin, h.saturating_sub(wm_rgba.height() + margin)),
+        "center" => ((w.saturating_sub(wm_rgba.width())) / 2, (h.saturating_sub(wm_rgba.height())) / 2),
+        _ => (w.saturating_sub(wm_rgba.width() + margin), h.saturating_sub(wm_rgba.height() + margin)),
+    };
 
     for wy in 0..wm_rgba.height() {
         for wx in 0..wm_rgba.width() {
