@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { FileText, Upload, Copy, Check, ShieldCheck, X } from "lucide-react";
+import { pickFile } from "../lib/tauri";
 import * as api from "../lib/tauri";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -37,8 +38,6 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
   // File hash state
   const [filePath, setFilePath] = useState("");
   const [fileName, setFileName] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Multi-hash state
   const [multiResult, setMultiResult] = useState<api.MultiHashResult | null>(null);
@@ -86,22 +85,15 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
     }
   };
 
-  const addFiles = useCallback((fileList: FileList) => {
-    const f = fileList[0];
-    if (f) {
-      setFilePath((f as unknown as { path?: string }).path || f.name);
-      setFileName(f.name);
-      setTextHash("");
-      setMultiResult(null);
-      setVerifyResult(null);
-    }
+  const openPicker = useCallback(async () => {
+    const picked = await pickFile();
+    if (!picked) return;
+    setFilePath(picked.path);
+    setFileName(picked.name);
+    setTextHash("");
+    setMultiResult(null);
+    setVerifyResult(null);
   }, []);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    addFiles(e.dataTransfer.files);
-  };
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -165,16 +157,13 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           {isFileBased && (
             <motion.div
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
               animate={{
-                borderColor: isDragging ? "rgba(96,165,250,0.5)" : "rgba(255,255,255,0.1)",
-                backgroundColor: isDragging ? "rgba(96,165,250,0.05)" : "rgba(255,255,255,0.02)",
+                borderColor: "rgba(255,255,255,0.1)",
+                backgroundColor: "rgba(255,255,255,0.02)",
               }}
               transition={spring}
               className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors"
-              onClick={() => inputRef.current?.click()}
+              onClick={openPicker}
             >
               {fileName ? (
                 <div className="flex items-center gap-2">
@@ -189,7 +178,6 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
                   <p className="text-sm text-white/60">Drop a file here or click to browse</p>
                 </>
               )}
-              <input ref={inputRef} type="file" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
             </motion.div>
           )}
 

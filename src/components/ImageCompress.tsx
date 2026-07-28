@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, X, ArrowDown } from "lucide-react";
+import { pickFiles } from "../lib/tauri";
 
 const springTransition = { type: "spring", stiffness: 300, damping: 30 };
 
@@ -8,7 +9,6 @@ interface FileInfo {
   name: string;
   path: string;
   size: number;
-  preview?: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -22,24 +22,11 @@ function formatBytes(bytes: number): string {
 export default function ImageCompress() {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [quality, setQuality] = useState(80);
-  const [isDragging, setIsDragging] = useState(false);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const droppedFiles = Array.from(e.dataTransfer.files).filter((f) =>
-      f.type.startsWith("image/")
-    );
-
-    const newFiles: FileInfo[] = droppedFiles.map((file) => ({
-      name: file.name,
-      path: (file as unknown as { path?: string }).path || "",
-      size: file.size,
-      preview: URL.createObjectURL(file),
-    }));
-
-    setFiles((prev) => [...prev, ...newFiles]);
+  const openPicker = useCallback(async () => {
+    const picked = await pickFiles([{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp"] }]);
+    if (picked.length === 0) return;
+    setFiles((prev) => [...prev, ...picked.map(f => ({ name: f.name, path: f.path, size: f.size }))]);
   }, []);
 
   const removeFile = (index: number) => {
@@ -56,46 +43,23 @@ export default function ImageCompress() {
       </div>
 
       <motion.div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
         animate={{
-          borderColor: isDragging ? "rgba(96, 165, 250, 0.5)" : "rgba(255,255,255,0.1)",
-          backgroundColor: isDragging ? "rgba(96, 165, 250, 0.05)" : "rgba(255,255,255,0.02)",
+          borderColor: "rgba(255,255,255,0.1)",
+          backgroundColor: "rgba(255,255,255,0.02)",
         }}
         transition={springTransition}
         className="border-2 border-dashed rounded-2xl p-12 flex flex-col items-center gap-4 cursor-pointer hover:border-white/20 transition-colors"
-        onClick={() => document.getElementById("file-input")?.click()}
+        onClick={openPicker}
       >
         <Upload className="w-8 h-8 text-white/30" />
         <div className="text-center">
           <p className="text-sm text-white/60">
-            Drop images here or click to browse
+            Click to select images
           </p>
           <p className="text-xs text-white/30 mt-1">
             Supports JPG, PNG, WebP
           </p>
         </div>
-        <input
-          id="file-input"
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            const selected = Array.from(e.target.files || []);
-            const newFiles: FileInfo[] = selected.map((file) => ({
-              name: file.name,
-              path: (file as unknown as { path?: string }).path || "",
-              size: file.size,
-              preview: URL.createObjectURL(file),
-            }));
-            setFiles((prev) => [...prev, ...newFiles]);
-          }}
-        />
       </motion.div>
 
       {files.length > 0 && (
@@ -129,13 +93,9 @@ export default function ImageCompress() {
                 transition={springTransition}
                 className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-border"
               >
-                {file.preview && (
-                  <img
-                    src={file.preview}
-                    alt={file.name}
-                    className="w-10 h-10 rounded-lg object-cover"
-                  />
-                )}
+                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-[8px] text-white/30 break-all p-0.5 text-center">
+                  {file.name.split('.').pop()}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{file.name}</p>
                   <p className="text-xs text-white/40">

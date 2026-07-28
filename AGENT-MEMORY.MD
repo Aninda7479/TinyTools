@@ -250,6 +250,8 @@ npx tsc --noEmit
 9. **`cargo check` passes but `cargo test` may not** — always verify both
 10. **P2P receiver port is hardcoded to 8787** — sender POSTs to `http://{peer_ip}:8787/api/receive`
 11. **Web portal serves on port 0 (OS-assigned)** — actual port returned in `PortalResult.port`
+12. **Welcome page sub-tool IDs must match page types exactly** — e.g. `"smart-sharpen"` not `"sharpen"`, `"strip-metadata"` not `"strip"`, `"vectorize"` not `"svg"`
+13. **Adding new feature to Welcome** — add to appropriate `sections` array in `Welcome.tsx` with correct `tool` and `sub` values, and ensure the target page accepts `defaultSub` prop
 
 ---
 
@@ -274,6 +276,7 @@ npx tsc --noEmit
 
 ## In-Progress / Backlog
 - [x] P2P file sharing module — Phase 1 (local Wi-Fi transfer + web portal) + Phase 2 (password-protected encrypted transfers)
+- [x] Welcome page redesign — 7 sections, 42 individual feature cards with sub-tool navigation
 - [ ] P2P: Cross-network WebRTC transfers (Phase 3 — deferred, needs signaling server)
 - [ ] P2P: Pause/resume transfers
 - [ ] P2P: Chunked streaming sender (currently reads full file into memory before sending)

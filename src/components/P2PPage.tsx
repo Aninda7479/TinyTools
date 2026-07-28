@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send,
@@ -13,6 +13,7 @@ import {
   FileUp,
 } from "lucide-react";
 import * as p2p from "../lib/p2p-api";
+import { pickFile } from "../lib/tauri";
 import P2PPeerList from "./P2PPeerList";
 import P2PTransferProgress from "./P2PTransferProgress";
 import P2PWebPortal from "./P2PWebPortal";
@@ -36,12 +37,10 @@ export default function P2PPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [activeTransfers, setActiveTransfers] = useState<ActiveTransfer[]>([]);
   const [portal, setPortal] = useState<p2p.PortalResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
@@ -49,24 +48,14 @@ export default function P2PPage() {
     };
   }, []);
 
-  const addFile = useCallback((fileList: FileList) => {
-    const f = fileList[0];
-    if (f) {
-      setFilePath((f as unknown as { path?: string }).path || f.name);
-      setFileName(f.name);
-      setFileSize(f.size);
-      setError("");
-    }
+  const openPicker = useCallback(async () => {
+    const picked = await pickFile();
+    if (!picked) return;
+    setFilePath(picked.path);
+    setFileName(picked.name);
+    setFileSize(picked.size);
+    setError("");
   }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      addFile(e.dataTransfer.files);
-    },
-    [addFile]
-  );
 
   const clearFile = () => {
     setFilePath("");
@@ -187,23 +176,13 @@ export default function P2PPage() {
           {tab !== "receive" && (
             <>
               <motion.div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
                 animate={{
-                  borderColor: isDragging
-                    ? "rgba(96,165,250,0.5)"
-                    : "rgba(255,255,255,0.1)",
-                  backgroundColor: isDragging
-                    ? "rgba(96,165,250,0.05)"
-                    : "rgba(255,255,255,0.02)",
+                  borderColor: "rgba(255,255,255,0.1)",
+                  backgroundColor: "rgba(255,255,255,0.02)",
                 }}
                 transition={spring}
                 className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors"
-                onClick={() => inputRef.current?.click()}
+                onClick={openPicker}
               >
                 {fileName ? (
                   <div className="flex items-center gap-2">
@@ -223,16 +202,10 @@ export default function P2PPage() {
                   <>
                     <Upload className="w-8 h-8 text-white/30" />
                     <p className="text-sm text-white/60">
-                      Drop a file here or click to browse
+                      Click to select a file
                     </p>
                   </>
                 )}
-                <input
-                  ref={inputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => e.target.files && addFile(e.target.files)}
-                />
               </motion.div>
 
               <div className="space-y-1.5">

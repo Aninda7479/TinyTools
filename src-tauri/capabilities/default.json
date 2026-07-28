@@ -9,6 +9,7 @@
     "core:window:default",
     "shell:allow-open",
     "fs:default",
+    "dialog:default",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]

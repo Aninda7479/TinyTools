@@ -1,9 +1,8 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Lock, Unlock, FileLock, FileDown, Copy, Check, Upload, X, Shield } from "lucide-react";
 import * as api from "../lib/tauri";
-
-const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
+import { pickFile } from "../lib/tauri";
 
 type SubTool =
   | "text-aes" | "text-chacha" | "text-classic"
@@ -40,8 +39,6 @@ export default function EncryptionPage({ defaultSub }: { defaultSub?: string } =
   const [filePath, setFilePath] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileOutputPath, setFileOutputPath] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleTextEncrypt = async () => {
     if (!input.trim() || !passphrase.trim()) return;
@@ -123,20 +120,13 @@ export default function EncryptionPage({ defaultSub }: { defaultSub?: string } =
     setTextMode(m => m === "encrypt" ? "decrypt" : "encrypt");
   };
 
-  const addFiles = useCallback((fileList: FileList) => {
-    const f = fileList[0];
-    if (f) {
-      setFilePath((f as unknown as { path?: string }).path || f.name);
-      setFileName(f.name);
-      setFileOutputPath("");
-    }
+  const openPicker = useCallback(async () => {
+    const picked = await pickFile();
+    if (!picked) return;
+    setFilePath(picked.path);
+    setFileName(picked.name);
+    setFileOutputPath("");
   }, []);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    addFiles(e.dataTransfer.files);
-  };
 
   const isTextBased = active.startsWith("text-");
 
@@ -286,16 +276,8 @@ export default function EncryptionPage({ defaultSub }: { defaultSub?: string } =
           ) : (
             <>
               <motion.div
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                animate={{
-                  borderColor: isDragging ? "rgba(96,165,250,0.5)" : "rgba(255,255,255,0.1)",
-                  backgroundColor: isDragging ? "rgba(96,165,250,0.05)" : "rgba(255,255,255,0.02)",
-                }}
-                transition={spring}
                 className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors"
-                onClick={() => inputRef.current?.click()}
+                onClick={openPicker}
               >
                 {fileName ? (
                   <div className="flex items-center gap-2">
@@ -307,10 +289,9 @@ export default function EncryptionPage({ defaultSub }: { defaultSub?: string } =
                 ) : (
                   <>
                     <Upload className="w-8 h-8 text-white/30" />
-                    <p className="text-sm text-white/60">Drop a file here or click to browse</p>
+                    <p className="text-sm text-white/60">Click to select a file</p>
                   </>
                 )}
-                <input ref={inputRef} type="file" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
               </motion.div>
 
               {fileOutputPath && (

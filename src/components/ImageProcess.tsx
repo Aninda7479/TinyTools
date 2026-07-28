@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, Wand2, X } from "lucide-react";
-import { processImage } from "../lib/tauri";
+import { processImage, pickFile } from "../lib/tauri";
 
 const springTransition = { type: "spring", stiffness: 300, damping: 30 };
 
@@ -16,42 +16,30 @@ const operations = [
 
 interface SelectedFile {
   name: string;
-  preview: string;
+  path: string;
   size: number;
 }
 
 export default function ImageProcess({ defaultSub }: { defaultSub?: string } = {}) {
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [selectedOp, setSelectedOp] = useState(defaultSub || "resize");
-  const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState("");
   const [resizeW, setResizeW] = useState(800);
   const [resizeH, setResizeH] = useState(800);
   const [blurSigma, setBlurSigma] = useState(3.0);
   const [sharpenAmount, setSharpenAmount] = useState(1.0);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const droppedFile = Array.from(e.dataTransfer.files).find((f) =>
-      f.type.startsWith("image/")
-    );
-
-    if (droppedFile) {
-      setFile({
-        name: droppedFile.name,
-        preview: URL.createObjectURL(droppedFile),
-        size: droppedFile.size,
-      });
-    }
+  const openPicker = useCallback(async () => {
+    const picked = await pickFile([{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp"] }]);
+    if (!picked) return;
+    setFile({ name: picked.name, path: picked.path, size: picked.size });
   }, []);
 
   const handleApply = async () => {
     if (!file) return;
     setStatus("Processing...");
     try {
-      const outPath = file.name.replace(/\.[^.]+$/, `_${selectedOp}.png`);
+      const outPath = file.path.replace(/\.[^.]+$/, `_${selectedOp}.png`);
       let params: Record<string, unknown> = {};
       switch (selectedOp) {
         case "resize": params = { width: resizeW, height: resizeH }; break;
@@ -60,7 +48,7 @@ export default function ImageProcess({ defaultSub }: { defaultSub?: string } = {
         case "rotate": params = { degrees: 90 }; break;
         case "flip": params = { direction: "horizontal" }; break;
       }
-      const result = await processImage(file.name, outPath, selectedOp, params);
+      const result = await processImage(file.path, outPath, selectedOp, params);
       setStatus(result.message);
     } catch (e) {
       setStatus(`Error: ${e}`);
@@ -79,54 +67,26 @@ export default function ImageProcess({ defaultSub }: { defaultSub?: string } = {
       <div className="flex gap-6 flex-1">
         <div className="flex-1 flex flex-col gap-4">
           <motion.div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
             animate={{
-              borderColor: isDragging
-                ? "rgba(96, 165, 250, 0.5)"
-                : "rgba(255,255,255,0.1)",
-              backgroundColor: isDragging
-                ? "rgba(96, 165, 250, 0.05)"
-                : "rgba(255,255,255,0.02)",
+              backgroundColor: "rgba(255,255,255,0.02)",
             }}
             transition={springTransition}
             className="border-2 border-dashed rounded-2xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors"
-            onClick={() => document.getElementById("process-file-input")?.click()}
+            onClick={openPicker}
           >
             {file ? (
-              <img
-                src={file.preview}
-                alt={file.name}
-                className="max-h-40 rounded-xl object-contain"
-              />
+              <div className="max-h-40 rounded-xl bg-white/5 border border-border px-4 py-3 text-center">
+                <p className="text-sm truncate">{file.name}</p>
+                <p className="text-xs text-white/40 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
             ) : (
               <>
                 <Upload className="w-8 h-8 text-white/30" />
                 <p className="text-sm text-white/60">
-                  Drop an image here or click to browse
+                  Click to browse an image
                 </p>
               </>
             )}
-            <input
-              id="process-file-input"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const selected = e.target.files?.[0];
-                if (selected) {
-                  setFile({
-                    name: selected.name,
-                    preview: URL.createObjectURL(selected),
-                    size: selected.size,
-                  });
-                }
-              }}
-            />
           </motion.div>
 
           {file && (
@@ -135,11 +95,9 @@ export default function ImageProcess({ defaultSub }: { defaultSub?: string } = {
               animate={{ opacity: 1 }}
               className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-border"
             >
-              <img
-                src={file.preview}
-                alt={file.name}
-                className="w-10 h-10 rounded-lg object-cover"
-              />
+              <div className="w-10 h-10 rounded-lg bg-white/5 border border-border flex items-center justify-center">
+                <p className="text-xs text-white/60 truncate px-1">{file.name.split(".").pop()}</p>
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm truncate">{file.name}</p>
               </div>

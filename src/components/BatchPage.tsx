@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Play, Layers, CheckCircle2, XCircle } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { OptionRow, OptionSlider, OptionSelect } from "./ToolPage";
-import { batchCompress, batchResize, batchConvert, batchWatermark } from "../lib/tauri";
+import { batchCompress, batchResize, batchConvert, batchWatermark, pickFiles } from "../lib/tauri";
 
 type BatchOp = "compress" | "resize" | "convert" | "watermark";
 
@@ -18,9 +18,7 @@ const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
 export default function BatchPage() {
   const [operation, setOperation] = useState<BatchOp>("compress");
-  const [files, setFiles] = useState<{ name: string; path: string; preview?: string }[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<{ name: string; path: string }[]>([]);
 
   const [quality, setQuality] = useState(80);
   const [resizeW, setResizeW] = useState(1920);
@@ -41,25 +39,11 @@ export default function BatchPage() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  const addFiles = useCallback((fileList: FileList) => {
-    const newFiles = Array.from(fileList)
-      .filter((f) => f.type.startsWith("image/"))
-      .map((f) => ({
-        name: f.name,
-        path: (f as unknown as { path?: string }).path || "",
-        preview: URL.createObjectURL(f),
-      }));
-    setFiles((prev) => [...prev, ...newFiles]);
+  const openPicker = useCallback(async () => {
+    const picked = await pickFiles([{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp"] }]);
+    if (picked.length === 0) return;
+    setFiles((prev) => [...prev, ...picked.map(f => ({ name: f.name, path: f.path }))]);
   }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      addFiles(e.dataTransfer.files);
-    },
-    [addFiles]
-  );
 
   const handleProcess = async () => {
     const paths = files.map((f) => f.path).filter((p) => p);
@@ -188,22 +172,21 @@ export default function BatchPage() {
         {/* Right: Drop zone */}
         <div className="flex-1 flex flex-col gap-4">
           <motion.div
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
             animate={{
-              borderColor: isDragging ? "rgba(96,165,250,0.5)" : "rgba(255,255,255,0.1)",
-              backgroundColor: isDragging ? "rgba(96,165,250,0.05)" : "rgba(255,255,255,0.02)",
+              borderColor: "rgba(255,255,255,0.1)",
+              backgroundColor: "rgba(255,255,255,0.02)",
             }}
             transition={spring}
             className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors min-h-[200px]"
-            onClick={() => !isProcessing && inputRef.current?.click()}
+            onClick={() => !isProcessing && openPicker()}
           >
             {files.length > 0 ? (
               <div className="flex flex-wrap gap-2 max-h-[300px] overflow-y-auto">
                 {files.map((f, i) => (
                   <div key={i} className="relative group">
-                    {f.preview && <img src={f.preview} alt={f.name} className="w-16 h-16 rounded-lg object-cover" />}
+                    <div className="w-16 h-16 rounded-lg bg-white/5 flex items-center justify-center text-[9px] text-white/40 text-center p-1 break-all">
+                      {f.name}
+                    </div>
                     <button onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
                       disabled={isProcessing}
                       className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
@@ -219,9 +202,6 @@ export default function BatchPage() {
                 <p className="text-xs text-white/30">Supports 100+ files in parallel</p>
               </>
             )}
-            <input ref={inputRef} type="file" accept="image/*" multiple className="hidden"
-              onChange={(e) => e.target.files && addFiles(e.target.files)}
-            />
           </motion.div>
 
           {files.length > 0 && (

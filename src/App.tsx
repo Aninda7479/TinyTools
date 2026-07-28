@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Sidebar, { type Tool } from "./components/Sidebar";
+import Sidebar, { type Tool, sidebarCategories } from "./components/Sidebar";
+import CategoryPage from "./components/CategoryPage";
 import Welcome from "./components/Welcome";
 import ImageCompress from "./components/ImageCompress";
 import QrGenerator from "./components/QrGenerator";
@@ -20,6 +21,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
+const catToolIds = new Set(sidebarCategories.map((c) => c.id));
+
 function AppInner() {
   const [activeTool, setActiveTool] = useState<Tool>("welcome");
   const [activeSub, setActiveSub] = useState<string | undefined>(undefined);
@@ -30,6 +33,13 @@ function AppInner() {
   };
 
   const renderTool = () => {
+    if (catToolIds.has(activeTool)) {
+      const cat = sidebarCategories.find((c) => c.id === activeTool);
+      if (cat) {
+        return <CategoryPage key={activeTool} category={cat} onNavigate={handleNavigate} />;
+      }
+    }
+
     switch (activeTool) {
       case "ai": return <AiToolsPage key="ai" defaultSub={activeSub} />;
       case "privacy": return <PrivacyPage key="privacy" defaultSub={activeSub} />;

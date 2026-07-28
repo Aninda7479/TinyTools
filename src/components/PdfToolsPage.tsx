@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Merge, Scissors, ArrowUpDown, RotateCw, Crop, Trash2,
@@ -9,7 +9,7 @@ import {
   getPdfInfo, mergePdfs, splitPdf, reorderPages, rotatePages,
   cropPages, deletePages, imagesToPdf, extractPdfText,
   encryptPdf, decryptPdf, unwrapPdf, compressPdf, flattenPdf,
-  addPdfWatermark, addPageNumbers
+  addPdfWatermark, addPageNumbers, pickFiles
 } from "../lib/tauri";
 import type { ToolResult } from "../lib/tauri";
 
@@ -55,7 +55,6 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
   const [result, setResult] = useState<ToolResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Options state
   const [pages, setPages] = useState("");
@@ -75,7 +74,6 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
   const [pnPos, setPnPos] = useState("bottom-center");
   const [margin, setMargin] = useState(20);
 
-  const acceptPdf = tool === "img2pdf" ? "image/*,.jpg,.jpeg,.png,.webp,.heic" : ".pdf,application/pdf";
   const multiFile = tool === "merge" || tool === "img2pdf";
 
   const reset = () => {
@@ -88,15 +86,17 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     setPassword("");
   };
 
-  const handleFiles = useCallback((fileList: FileList) => {
-    const arr = Array.from(fileList).map(f => ({
-      name: f.name,
-      path: (f as unknown as { path?: string }).path || "",
-    }));
+  const openPicker = useCallback(async () => {
+    const filters = tool === "img2pdf"
+      ? [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "heic"] }]
+      : [{ name: "PDFs", extensions: ["pdf"] }];
+    const picked = await pickFiles(filters);
+    if (picked.length === 0) return;
+    const arr = picked.map(f => ({ name: f.name, path: f.path }));
     setFiles(prev => multiFile ? [...prev, ...arr] : arr.slice(0, 1));
     setResult(null);
     setError("");
-  }, [multiFile]);
+  }, [multiFile, tool]);
 
   const run = async (action: () => Promise<ToolResult>) => {
     setLoading(true);
@@ -372,10 +372,10 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           {/* Drop zone */}
           <motion.div
             onDragOver={e => { e.preventDefault(); }}
-            onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+            onDrop={e => { e.preventDefault(); openPicker(); }}
             animate={{ borderColor: files.length ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)" }}
             className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-2 cursor-pointer hover:border-white/20 transition-colors min-h-[120px]"
-            onClick={() => inputRef.current?.click()}
+            onClick={openPicker}
           >
             {files.length > 0 ? (
               <div className="flex gap-2 flex-wrap">
@@ -396,8 +396,6 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                 <p className="text-xs text-white/50">Drop {multiFile ? "files" : "a PDF"} here or click to browse</p>
               </>
             )}
-            <input ref={inputRef} type="file" accept={acceptPdf} multiple={multiFile} className="hidden"
-              onChange={e => e.target.files && handleFiles(e.target.files)} />
           </motion.div>
 
           {/* Process button */}

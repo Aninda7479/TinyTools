@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, X, Play } from "lucide-react";
+import { pickFiles } from "../lib/tauri";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -8,7 +9,6 @@ interface FileItem {
   name: string;
   path: string;
   size: number;
-  preview?: string;
 }
 
 export default function ToolPage({
@@ -28,17 +28,12 @@ export default function ToolPage({
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const addFiles = useCallback((fileList: FileList) => {
-    const newFiles = Array.from(fileList)
-      .filter((f) => f.type.startsWith("image/"))
-      .map((f) => ({
-        name: f.name,
-        path: (f as unknown as { path?: string }).path || "",
-        size: f.size,
-        preview: URL.createObjectURL(f),
-      }));
+  const openPicker = useCallback(async () => {
+    const filters = [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic"] }];
+    const picked = await pickFiles(filters);
+    if (picked.length === 0) return;
+    const newFiles = picked.map((f) => ({ name: f.name, path: f.path, size: f.size }));
     setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
   }, [multiFile]);
 
@@ -46,9 +41,9 @@ export default function ToolPage({
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      addFiles(e.dataTransfer.files);
+      openPicker();
     },
-    [addFiles]
+    [openPicker]
   );
 
   return (
@@ -74,15 +69,15 @@ export default function ToolPage({
             }}
             transition={spring}
             className="border-2 border-dashed rounded-2xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors min-h-[200px]"
-            onClick={() => inputRef.current?.click()}
+            onClick={openPicker}
           >
             {files.length > 0 ? (
               <div className={`flex gap-3 flex-wrap ${multiFile ? "" : ""}`}>
                 {files.map((f, i) => (
-                  <div key={i} className="relative group">
-                    {f.preview && (
-                      <img src={f.preview} alt={f.name} className="w-24 h-24 rounded-xl object-cover" />
-                    )}
+                  <div key={i} className="relative group flex flex-col items-center">
+                    <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
+                      {f.name}
+                    </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
                       className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -101,14 +96,6 @@ export default function ToolPage({
                 </p>
               </>
             )}
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              multiple={multiFile}
-              className="hidden"
-              onChange={(e) => e.target.files && addFiles(e.target.files)}
-            />
           </motion.div>
 
           {files.length > 0 && (

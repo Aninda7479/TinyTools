@@ -1,10 +1,46 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 export interface FileInfo {
   name: string;
   path: string;
   size: number;
   extension: string;
+}
+
+async function pathToFileInfo(p: string): Promise<FileInfo> {
+  const name = p.split(/[\\/]/).pop() ?? "";
+  const ext = name.includes(".") ? name.split(".").pop()! : "";
+  let size = 0;
+  try {
+    const metadata = await invoke<{ size?: number }>("get_file_info", { path: p });
+    size = metadata?.size ?? 0;
+  } catch { /* ignore */ }
+  return { name, path: p, size, extension: ext };
+}
+
+export async function pickFile(filters?: { name: string; extensions: string[] }[]): Promise<FileInfo | null> {
+  const selected = await open({ multiple: false, filters });
+  if (!selected) return null;
+  const p = typeof selected === "string" ? selected : selected;
+  return pathToFileInfo(p as string);
+}
+
+export async function pickFiles(filters?: { name: string; extensions: string[] }[]): Promise<FileInfo[]> {
+  const selected = await open({ multiple: true, filters });
+  if (!selected) return [];
+  const paths = Array.isArray(selected) ? selected : [selected];
+  return Promise.all(paths.map(p => pathToFileInfo(p as string)));
+}
+
+export async function pickDirectory(): Promise<string | null> {
+  const selected = await open({ directory: true });
+  if (!selected) return null;
+  return selected as string;
+}
+
+export async function saveFile(defaultPath?: string, filters?: { name: string; extensions: string[] }[]): Promise<string | null> {
+  return save({ defaultPath, filters });
 }
 
 export interface ToolResult {
