@@ -15,35 +15,43 @@ import PasswordGeneratorPage from "./components/PasswordGeneratorPage";
 import EncoderDecoderPage from "./components/EncoderDecoderPage";
 import HasherPage from "./components/HasherPage";
 import EncryptionPage from "./components/EncryptionPage";
+import P2PPage from "./components/P2PPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
 function AppInner() {
   const [activeTool, setActiveTool] = useState<Tool>("welcome");
+  const [activeSub, setActiveSub] = useState<string | undefined>(undefined);
+
+  const handleNavigate = (tool: Tool, sub?: string) => {
+    setActiveTool(tool);
+    setActiveSub(sub);
+  };
 
   const renderTool = () => {
     switch (activeTool) {
-      case "ai": return <AiToolsPage key="ai" />;
-      case "privacy": return <PrivacyPage key="privacy" />;
-      case "editing": return <EditingPage key="editing" />;
+      case "ai": return <AiToolsPage key="ai" defaultSub={activeSub} />;
+      case "privacy": return <PrivacyPage key="privacy" defaultSub={activeSub} />;
+      case "editing": return <EditingPage key="editing" defaultSub={activeSub} />;
       case "compress": return <ImageCompress key="compress" />;
-      case "conversion": return <ConversionPage key="conversion" />;
+      case "conversion": return <ConversionPage key="conversion" defaultSub={activeSub} />;
       case "qr": return <QrGenerator key="qr" />;
-      case "process": return <ImageProcess key="process" />;
+      case "process": return <ImageProcess key="process" defaultSub={activeSub} />;
       case "batch": return <BatchPage key="batch" />;
-      case "pdf": return <PdfToolsPage key="pdf" />;
+      case "pdf": return <PdfToolsPage key="pdf" defaultSub={activeSub} />;
       case "password": return <PasswordGeneratorPage key="password" />;
-      case "encoder": return <EncoderDecoderPage key="encoder" />;
-      case "hasher": return <HasherPage key="hasher" />;
-      case "encryption": return <EncryptionPage key="encryption" />;
-      default: return <Welcome key="welcome" onNavigate={setActiveTool} />;
+      case "encoder": return <EncoderDecoderPage key="encoder" defaultSub={activeSub} />;
+      case "hasher": return <HasherPage key="hasher" defaultSub={activeSub} />;
+      case "encryption": return <EncryptionPage key="encryption" defaultSub={activeSub} />;
+      case "p2p": return <P2PPage key="p2p" />;
+      default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }
   };
 
   return (
     <div className="flex h-screen bg-surface-solid">
-      <Sidebar activeTool={activeTool} onToolSelect={setActiveTool} />
+      <Sidebar activeTool={activeTool} onToolSelect={handleNavigate} />
       <main className="flex-1 overflow-auto p-6">
         <AnimatePresence mode="wait">
           <motion.div key={activeTool} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}

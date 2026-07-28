@@ -310,3 +310,125 @@ pub fn octal_to_text(input: String) -> Result<String, String> {
     }
     String::from_utf8(bytes).map_err(|e| format!("Invalid UTF-8: {}", e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_base64_roundtrip() {
+        let input = "Hello, World!";
+        let encoded = encode_base64(input.to_string()).unwrap();
+        let decoded = decode_base64(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_base64url_roundtrip() {
+        let input = "path/to/file?query=1&key=value";
+        let encoded = encode_base64url(input.to_string()).unwrap();
+        assert!(!encoded.contains('+'));
+        assert!(!encoded.contains('/'));
+        let decoded = decode_base64url(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_base32_roundtrip() {
+        let input = "Hello, World!";
+        let encoded = encode_base32(input.to_string()).unwrap();
+        let decoded = decode_base32(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_base58_roundtrip() {
+        let input = "TinyTools rocks!";
+        let encoded = encode_base58(input.to_string()).unwrap();
+        let decoded = decode_base58(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_hex_roundtrip() {
+        let input = "ABCDEF";
+        let encoded = encode_hex(input.to_string()).unwrap();
+        assert_eq!(encoded, "414243444546");
+        let decoded = decode_hex(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_hex_0x_prefix() {
+        let decoded = decode_hex("0x48656c6c6f".to_string()).unwrap();
+        assert_eq!(decoded, "Hello");
+    }
+
+    #[test]
+    fn test_url_encoding_roundtrip() {
+        let input = "hello world&foo=bar+baz";
+        let encoded = encode_url(input.to_string()).unwrap();
+        let decoded = decode_url(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_html_encoding_roundtrip() {
+        let input = r#"He said "hello" & <goodbye>"#;
+        let encoded = encode_html(input.to_string()).unwrap();
+        assert!(encoded.contains("&amp;"));
+        assert!(encoded.contains("&lt;"));
+        assert!(encoded.contains("&gt;"));
+        assert!(encoded.contains("&quot;"));
+        let decoded = decode_html(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_unicode_encoding_roundtrip() {
+        let input = "Hi";
+        let encoded = encode_unicode(input.to_string()).unwrap();
+        assert_eq!(encoded, "\\u0048\\u0069");
+        let decoded = decode_unicode(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_jwt_decode() {
+        let header = base64::Engine::encode(&general_purpose::URL_SAFE_NO_PAD, br#"{"alg":"HS256","typ":"JWT"}"#);
+        let payload = base64::Engine::encode(&general_purpose::URL_SAFE_NO_PAD, br#"{"sub":"1234"}"#);
+        let sig = base64::Engine::encode(&general_purpose::URL_SAFE_NO_PAD, b"signature");
+        let token = format!("{}.{}.{}", header, payload, sig);
+        let result = decode_jwt(token).unwrap();
+        assert!(result.valid_json);
+        assert!(result.header.contains("HS256"));
+        assert!(result.payload.contains("1234"));
+    }
+
+    #[test]
+    fn test_morse_roundtrip() {
+        let input = "SOS";
+        let morse = text_to_morse(input.to_string()).unwrap();
+        assert_eq!(morse, "··· --- ···");
+        let text = morse_to_text(morse).unwrap();
+        assert_eq!(text, "SOS");
+    }
+
+    #[test]
+    fn test_binary_roundtrip() {
+        let input = "AB";
+        let binary = text_to_binary(input.to_string()).unwrap();
+        assert_eq!(binary, "01000001 01000010");
+        let decoded = binary_to_text(binary).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_octal_roundtrip() {
+        let input = "Hi";
+        let octal = text_to_octal(input.to_string()).unwrap();
+        assert_eq!(octal, "110 151");
+        let decoded = octal_to_text(octal).unwrap();
+        assert_eq!(decoded, input);
+    }
+}

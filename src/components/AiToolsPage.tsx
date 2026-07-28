@@ -13,8 +13,8 @@ const tools: { id: AiTool; label: string; description: string }[] = [
   { id: "depth-blur", label: "Depth Blur", description: "DSLR-style bokeh background blur" },
 ];
 
-export default function AiToolsPage() {
-  const [selectedTool, setSelectedTool] = useState<AiTool>("bg-remove");
+export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [selectedTool, setSelectedTool] = useState<AiTool>((defaultSub as AiTool) || "bg-remove");
   const [scale, setScale] = useState(2);
   const [blurStrength, setBlurStrength] = useState(8.0);
   const [faceStrength, setFaceStrength] = useState(1.0);  const [status, setStatus] = useState("");

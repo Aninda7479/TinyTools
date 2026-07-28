@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
-import { Sparkles, Image, QrCode, Wand2, Brain, Shield, Scissors, RefreshCw, Layers, FileText, Key, Binary, Hash, Lock } from "lucide-react";
+import { Sparkles, Image, QrCode, Wand2, Brain, Shield, Scissors, RefreshCw, Layers, FileText, Key, Binary, Hash, Lock, Radio } from "lucide-react";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-export type Tool = "welcome" | "compress" | "qr" | "process" | "ai" | "privacy" | "editing" | "conversion" | "batch" | "pdf" | "password" | "encoder" | "hasher" | "encryption";
+export type Tool = "welcome" | "compress" | "qr" | "process" | "ai" | "privacy" | "editing" | "conversion" | "batch" | "pdf" | "password" | "encoder" | "hasher" | "encryption" | "p2p";
 
 interface SidebarProps {
   activeTool: Tool;
-  onToolSelect: (tool: Tool) => void;
+  onToolSelect: (tool: Tool, sub?: string) => void;
 }
 
 const tools: { id: Tool; icon: typeof Image; label: string }[] = [
@@ -21,6 +21,7 @@ const tools: { id: Tool; icon: typeof Image; label: string }[] = [
   { id: "encoder", icon: Binary, label: "Encoder" },
   { id: "hasher", icon: Hash, label: "Hasher" },
   { id: "encryption", icon: Lock, label: "Encrypt" },
+  { id: "p2p", icon: Radio, label: "P2P Share" },
   { id: "qr", icon: QrCode, label: "QR Code" },
   { id: "process", icon: Wand2, label: "Process" },
   { id: "batch", icon: Layers, label: "Batch" },

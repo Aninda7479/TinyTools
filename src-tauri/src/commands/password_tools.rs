@@ -514,3 +514,168 @@ pub fn export_passwords(passwords: Vec<String>, format: String, output_path: Str
     std::fs::write(&output_path, content).map_err(|e| e.to_string())?;
     Ok(output_path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_random_password() {
+        let req = PasswordRequest {
+            mode: "random".to_string(),
+            length: Some(20),
+            word_count: None,
+            count: None,
+            uppercase: Some(true),
+            lowercase: Some(true),
+            digits: Some(true),
+            symbols: Some(true),
+            exclude_ambiguous: None,
+            custom_symbols: None,
+            separator: None,
+            pattern: None,
+        };
+        let result = generate_password(req).unwrap();
+        assert_eq!(result.password.len(), 20);
+        assert!(result.entropy_bits > 0.0);
+        assert_eq!(result.charset_size, 26 + 26 + 10 + 27);
+    }
+
+    #[test]
+    fn test_generate_pin() {
+        let req = PasswordRequest {
+            mode: "pin".to_string(),
+            length: Some(8),
+            word_count: None,
+            count: None,
+            uppercase: None,
+            lowercase: None,
+            digits: None,
+            symbols: None,
+            exclude_ambiguous: None,
+            custom_symbols: None,
+            separator: None,
+            pattern: None,
+        };
+        let result = generate_password(req).unwrap();
+        assert_eq!(result.password.len(), 8);
+        assert!(result.password.chars().all(|c| c.is_ascii_digit()));
+        assert_eq!(result.charset_size, 10);
+    }
+
+    #[test]
+    fn test_generate_passphrase() {
+        let req = PasswordRequest {
+            mode: "passphrase".to_string(),
+            length: None,
+            word_count: Some(4),
+            count: None,
+            uppercase: None,
+            lowercase: None,
+            digits: None,
+            symbols: None,
+            exclude_ambiguous: None,
+            custom_symbols: None,
+            separator: Some("-".to_string()),
+            pattern: None,
+        };
+        let result = generate_password(req).unwrap();
+        let parts: Vec<&str> = result.password.split('-').collect();
+        assert_eq!(parts.len(), 4);
+        for part in &parts {
+            assert!(WORD_LIST.contains(part));
+        }
+    }
+
+    #[test]
+    fn test_generate_pronounceable() {
+        let req = PasswordRequest {
+            mode: "pronounceable".to_string(),
+            length: Some(3),
+            word_count: None,
+            count: None,
+            uppercase: None,
+            lowercase: None,
+            digits: Some(true),
+            symbols: None,
+            exclude_ambiguous: None,
+            custom_symbols: None,
+            separator: None,
+            pattern: None,
+        };
+        let result = generate_password(req).unwrap();
+        assert!(result.password.len() > 10);
+        assert!(result.password.contains('-'));
+    }
+
+    #[test]
+    fn test_generate_pattern() {
+        let req = PasswordRequest {
+            mode: "pattern".to_string(),
+            length: None,
+            word_count: None,
+            count: None,
+            uppercase: None,
+            lowercase: None,
+            digits: None,
+            symbols: None,
+            exclude_ambiguous: None,
+            custom_symbols: None,
+            separator: None,
+            pattern: Some("aaa-999".to_string()),
+        };
+        let result = generate_password(req).unwrap();
+        let parts: Vec<&str> = result.password.split('-').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0].len(), 3);
+        assert!(parts[0].chars().all(|c| c.is_ascii_lowercase()));
+        assert_eq!(parts[1].len(), 3);
+        assert!(parts[1].chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_generate_bulk() {
+        let req = PasswordRequest {
+            mode: "pin".to_string(),
+            length: Some(6),
+            word_count: None,
+            count: Some(50),
+            uppercase: None,
+            lowercase: None,
+            digits: None,
+            symbols: None,
+            exclude_ambiguous: None,
+            custom_symbols: None,
+            separator: None,
+            pattern: None,
+        };
+        let result = generate_bulk(req).unwrap();
+        assert_eq!(result.count, 50);
+        assert_eq!(result.passwords.len(), 50);
+        for p in &result.passwords {
+            assert_eq!(p.password.len(), 6);
+        }
+    }
+
+    #[test]
+    fn test_export_passwords_csv() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("passwords.csv");
+        let passwords = vec!["pass1".to_string(), "pass2".to_string()];
+        let result = export_passwords(passwords, "csv".to_string(), path.to_str().unwrap().to_string()).unwrap();
+        let content = std::fs::read_to_string(&result).unwrap();
+        assert!(content.contains("password"));
+        assert!(content.contains("pass1"));
+        assert!(content.contains("pass2"));
+    }
+
+    #[test]
+    fn test_strength_labels() {
+        assert_eq!(strength_label(0.0), "Very Weak");
+        assert_eq!(strength_label(30.0), "Weak");
+        assert_eq!(strength_label(50.0), "Fair");
+        assert_eq!(strength_label(70.0), "Strong");
+        assert_eq!(strength_label(100.0), "Very Strong");
+        assert_eq!(strength_label(150.0), "Overkill");
+    }
+}

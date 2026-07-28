@@ -19,8 +19,8 @@ const subTools: { id: SubTool; label: string; category: string }[] = [
 
 type ClassicCipher = "rot13" | "caesar" | "vigenere" | "xor";
 
-export default function EncryptionPage() {
-  const [active, setActive] = useState<SubTool>("text-aes");
+export default function EncryptionPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [active, setActive] = useState<SubTool>((defaultSub as SubTool) || "text-aes");
   const [textMode, setTextMode] = useState<"encrypt" | "decrypt">("encrypt");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");

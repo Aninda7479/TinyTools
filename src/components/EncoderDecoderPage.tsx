@@ -26,8 +26,8 @@ const copyToClipboard = async (text: string) => {
   await navigator.clipboard.writeText(text);
 };
 
-export default function EncoderDecoderPage() {
-  const [active, setActive] = useState<SubTool>("base64");
+export default function EncoderDecoderPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [active, setActive] = useState<SubTool>((defaultSub as SubTool) || "base64");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [direction, setDirection] = useState<"encode" | "decode">("encode");

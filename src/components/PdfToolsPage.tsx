@@ -49,8 +49,8 @@ const tools: ToolCard[] = [
 
 const categories = ["Info", "Pages", "Convert", "Security", "Enhance"];
 
-export default function PdfToolsPage() {
-  const [tool, setTool] = useState<PdfTool>("select");
+export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [tool, setTool] = useState<PdfTool>((defaultSub as PdfTool) || "select");
   const [files, setFiles] = useState<{ name: string; path: string }[]>([]);
   const [result, setResult] = useState<ToolResult | null>(null);
   const [loading, setLoading] = useState(false);

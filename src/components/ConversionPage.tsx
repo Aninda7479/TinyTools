@@ -4,8 +4,8 @@ import { smartCompress, convertFormat, convertHeic, rasterToSvg } from "../lib/t
 
 type ConvertTool = "compress" | "convert" | "heic" | "vectorize";
 
-export default function ConversionPage() {
-  const [selectedTool, setSelectedTool] = useState<ConvertTool>("compress");
+export default function ConversionPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [selectedTool, setSelectedTool] = useState<ConvertTool>((defaultSub as ConvertTool) || "compress");
   const [quality, setQuality] = useState(80);
   const [useTarget, setUseTarget] = useState(false);
   const [targetSize, setTargetSize] = useState(500);

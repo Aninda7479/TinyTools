@@ -1,102 +1,237 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode, Wand2, Layers, FileText, Key, Binary, Hash, Lock } from "lucide-react";
+import {
+  Search, Sparkles, Brain, Shield, Scissors, Image, RefreshCw, QrCode,
+  Wand2, Layers, FileText, Key, Binary, Hash, Lock, Radio,
+  Paintbrush, Minimize, FileUp, Stamp, ArrowUpDown, RotateCw, Crop,
+  Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
+  Gauge, Zap, SplitSquareHorizontal, Combine, ChevronRight, Palette,
+  ShieldCheck, FileLock,
+} from "lucide-react";
 import type { Tool } from "./Sidebar";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-const features: { icon: typeof Brain; title: string; description: string; tool: Tool; keywords: string }[] = [
-  { icon: Brain, title: "AI & Smart Tools", description: "Background removal, upscaling, colorization, face enhance, depth blur", tool: "ai", keywords: "ai artificial intelligence remove background upscale colorize face blur depth" },
-  { icon: Shield, title: "Privacy & Metadata", description: "EXIF stripper, redactor, invisible watermarks", tool: "privacy", keywords: "privacy metadata exif strip redact watermark protect sensitive" },
-  { icon: Scissors, title: "Editing & Layout", description: "Smart crop, canvas expand, image splitter, stitcher", tool: "editing", keywords: "edit crop resize canvas split stitch layout combine" },
-  { icon: Image, title: "Image Compress", description: "Reduce file sizes with adjustable quality", tool: "compress", keywords: "compress reduce size quality jpeg jpg optimize small" },
-  { icon: RefreshCw, title: "Compression & Conversion", description: "Format converter, HEIC, vectorize, smart compress", tool: "conversion", keywords: "convert format heic svg vectorize compress transform change" },
-  { icon: QrCode, title: "QR Code Generator", description: "Custom dots, gradients, logos, frames, export SVG/PNG/WebP", tool: "qr", keywords: "qr code generator barcode scan custom gradient logo frame" },
-  { icon: Key, title: "Password Generator", description: "CSPRNG passwords, passphrases, PINs, pronounceable, bulk export", tool: "password", keywords: "password generator random passphrase pin diceware secure crypto csprng bulk" },
-  { icon: Wand2, title: "Image Process", description: "Resize, grayscale, rotate, flip, blur, sharpen", tool: "process", keywords: "process resize grayscale rotate flip blur sharpen filter adjust" },
-  { icon: Layers, title: "Batch Engine", description: "Process 100+ files in parallel with Rust multi-threading", tool: "batch", keywords: "batch bulk parallel multiple files process speed rust" },
-  { icon: FileText, title: "PDF Tools", description: "Merge, split, crop, rotate, encrypt, watermark, compress PDFs", tool: "pdf", keywords: "pdf merge split crop rotate encrypt watermark compress text extract pages document" },
-  { icon: Binary, title: "Encoder / Decoder", description: "Base64, Base32, Base58, Hex, URL, HTML, Unicode, JWT, Morse, Binary", tool: "encoder", keywords: "encode decode base64 base32 base58 hex url html unicode jwt morse binary octal" },
-  { icon: Hash, title: "Hasher", description: "MD5, SHA-256, SHA-512, BLAKE3, CRC32, XXH3, file integrity", tool: "hasher", keywords: "hash checksum md5 sha blake3 crc32 xxh3 file integrity verify" },
-  { icon: Lock, title: "Encryption", description: "AES-256-GCM, ChaCha20, ROT13, Caesar, Vigenère, file encryption", tool: "encryption", keywords: "encrypt decrypt aes chacha20 rot13 caesar vigenere xor cipher file password" },
+interface Feature {
+  icon: typeof Brain;
+  title: string;
+  tag: string;
+  tool: Tool;
+  sub?: string;
+  keywords: string;
+}
+
+const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
+  {
+    label: "Image",
+    icon: Image,
+    features: [
+      { icon: Brain, title: "BG Remove", tag: "AI", tool: "ai", sub: "bg-remove", keywords: "background remove transparent cutout" },
+      { icon: Zap, title: "Upscale", tag: "AI", tool: "ai", sub: "upscale", keywords: "upscale enhance resolution 2x 4x" },
+      { icon: Paintbrush, title: "Inpaint", tag: "AI", tool: "ai", sub: "inpaint", keywords: "inpaint fill remove object repair" },
+      { icon: Palette, title: "Sepia Tone", tag: "AI", tool: "ai", sub: "sepia", keywords: "sepia vintage tone warm filter" },
+      { icon: Gauge, title: "Smart Sharpen", tag: "AI", tool: "ai", sub: "smart-sharpen", keywords: "sharpen edge enhance detail" },
+      { icon: Eye, title: "Depth Blur", tag: "AI", tool: "ai", sub: "depth-blur", keywords: "depth blur bokeh portrait" },
+      { icon: Shield, title: "Strip Metadata", tag: "Privacy", tool: "privacy", sub: "strip-metadata", keywords: "exif metadata strip remove gps" },
+      { icon: FileLock, title: "Redact Regions", tag: "Privacy", tool: "privacy", sub: "redact", keywords: "redact blur pixelate hide sensitive" },
+      { icon: Stamp, title: "Watermark", tag: "Privacy", tool: "privacy", sub: "watermark", keywords: "watermark text overlay copyright" },
+      { icon: Scissors, title: "Smart Crop", tag: "Edit", tool: "editing", sub: "crop", keywords: "crop resize smart focus point" },
+      { icon: SplitSquareHorizontal, title: "Expand Canvas", tag: "Edit", tool: "editing", sub: "expand", keywords: "expand canvas pad border padding" },
+      { icon: Combine, title: "Split Image", tag: "Edit", tool: "editing", sub: "split", keywords: "split divide grid cut tiles" },
+      { icon: Layers, title: "Stitch Images", tag: "Edit", tool: "editing", sub: "stitch", keywords: "stitch combine merge join" },
+      { icon: Minimize, title: "Compress", tag: "Convert", tool: "compress", keywords: "compress reduce size optimize quality" },
+      { icon: RefreshCw, title: "Format Convert", tag: "Convert", tool: "conversion", sub: "convert", keywords: "convert format png jpg webp" },
+      { icon: FileUp, title: "HEIC Convert", tag: "Convert", tool: "conversion", sub: "heic", keywords: "heic heif convert apple iphone" },
+      { icon: Wand2, title: "Smart Compress", tag: "Convert", tool: "conversion", sub: "compress", keywords: "smart compress target size quality" },
+      { icon: Paintbrush, title: "Raster to SVG", tag: "Convert", tool: "conversion", sub: "vectorize", keywords: "vectorize svg trace raster" },
+      { icon: Wand2, title: "Resize", tag: "Process", tool: "process", sub: "resize", keywords: "resize scale dimensions pixels" },
+      { icon: Palette, title: "Grayscale", tag: "Process", tool: "process", sub: "grayscale", keywords: "grayscale black white monochrome" },
+      { icon: RotateCw, title: "Rotate", tag: "Process", tool: "process", sub: "rotate", keywords: "rotate turn 90 180 270 degrees" },
+      { icon: Scissors, title: "Flip", tag: "Process", tool: "process", sub: "flip", keywords: "flip mirror horizontal vertical" },
+      { icon: Eye, title: "Blur", tag: "Process", tool: "process", sub: "blur", keywords: "blur gaussian soft focus" },
+      { icon: Gauge, title: "Sharpen", tag: "Process", tool: "process", sub: "sharpen", keywords: "sharpen enhance edge detail" },
+      { icon: Layers, title: "Batch Process", tag: "Batch", tool: "batch", keywords: "batch bulk parallel multiple files" },
+    ],
+  },
+  {
+    label: "QR Code",
+    icon: QrCode,
+    features: [
+      { icon: QrCode, title: "QR Generator", tag: "Create", tool: "qr", keywords: "qr code generate custom logo gradient" },
+    ],
+  },
+  {
+    label: "PDF",
+    icon: FileText,
+    features: [
+      { icon: Info, title: "PDF Info", tag: "Info", tool: "pdf", sub: "info", keywords: "pdf info metadata pages size version" },
+      { icon: Layers, title: "Merge PDFs", tag: "Pages", tool: "pdf", sub: "merge", keywords: "merge combine join pdf files" },
+      { icon: Scissors, title: "Split & Extract", tag: "Pages", tool: "pdf", sub: "split", keywords: "split extract separate pages" },
+      { icon: ArrowUpDown, title: "Reorder Pages", tag: "Pages", tool: "pdf", sub: "reorder", keywords: "reorder rearrange sort pages" },
+      { icon: RotateCw, title: "Rotate Pages", tag: "Pages", tool: "pdf", sub: "rotate", keywords: "rotate pages 90 180 270" },
+      { icon: Crop, title: "Crop Pages", tag: "Pages", tool: "pdf", sub: "crop", keywords: "crop trim margins pages" },
+      { icon: Trash2, title: "Delete Pages", tag: "Pages", tool: "pdf", sub: "delete", keywords: "delete remove pages" },
+      { icon: ImagePlus, title: "Images to PDF", tag: "Convert", tool: "pdf", sub: "img2pdf", keywords: "images photos to pdf convert" },
+      { icon: FileText, title: "Extract Text", tag: "Convert", tool: "pdf", sub: "text", keywords: "extract text content copy" },
+      { icon: Lock, title: "Encrypt PDF", tag: "Security", tool: "pdf", sub: "encrypt", keywords: "encrypt password protect lock" },
+      { icon: Unlock, title: "Decrypt PDF", tag: "Security", tool: "pdf", sub: "decrypt", keywords: "decrypt unlock remove password" },
+      { icon: Minimize2, title: "Compress PDF", tag: "Enhance", tool: "pdf", sub: "compress", keywords: "compress reduce size optimize" },
+      { icon: Minimize2, title: "Flatten PDF", tag: "Enhance", tool: "pdf", sub: "flatten", keywords: "flatten form fields" },
+      { icon: Stamp, title: "Add Watermark", tag: "Enhance", tool: "pdf", sub: "watermark", keywords: "watermark text overlay" },
+      { icon: Hash, title: "Page Numbers", tag: "Enhance", tool: "pdf", sub: "pagenum", keywords: "page numbers stamp header footer" },
+    ],
+  },
+  {
+    label: "Security",
+    icon: Lock,
+    features: [
+      { icon: Key, title: "Password Generator", tag: "Generate", tool: "password", keywords: "password generator random secure passphrase pin" },
+      { icon: Lock, title: "AES-256-GCM", tag: "Text", tool: "encryption", sub: "text-aes", keywords: "aes encrypt decrypt text strong" },
+      { icon: Lock, title: "ChaCha20-Poly1305", tag: "Text", tool: "encryption", sub: "text-chacha", keywords: "chacha20 encrypt decrypt text modern" },
+      { icon: Hash, title: "Classic Ciphers", tag: "Text", tool: "encryption", sub: "text-classic", keywords: "rot13 caesar vigenere xor cipher" },
+      { icon: FileLock, title: "File AES Encrypt", tag: "File", tool: "encryption", sub: "file-aes", keywords: "aes file encrypt decrypt password" },
+      { icon: FileLock, title: "File ChaCha Encrypt", tag: "File", tool: "encryption", sub: "file-chacha", keywords: "chacha file encrypt decrypt" },
+    ],
+  },
+  {
+    label: "Encode / Decode",
+    icon: Binary,
+    features: [
+      { icon: Binary, title: "Base64", tag: "Encode", tool: "encoder", sub: "base64", keywords: "base64 encode decode standard" },
+      { icon: Binary, title: "Base64URL", tag: "Encode", tool: "encoder", sub: "base64url", keywords: "base64url url-safe encode decode" },
+      { icon: Binary, title: "Base32", tag: "Encode", tool: "encoder", sub: "base32", keywords: "base32 encode decode" },
+      { icon: Binary, title: "Base58", tag: "Encode", tool: "encoder", sub: "base58", keywords: "base58 bitcoin crypto encode decode" },
+      { icon: Binary, title: "Hex", tag: "Encode", tool: "encoder", sub: "hex", keywords: "hexadecimal base16 encode decode" },
+      { icon: Binary, title: "URL Encode", tag: "Encode", tool: "encoder", sub: "url", keywords: "url percent encoding uri" },
+      { icon: Binary, title: "HTML Entities", tag: "Encode", tool: "encoder", sub: "html", keywords: "html entities special characters" },
+      { icon: Binary, title: "Unicode Escape", tag: "Encode", tool: "encoder", sub: "unicode", keywords: "unicode utf-8 escape sequences" },
+      { icon: Binary, title: "JWT Decoder", tag: "Encode", tool: "encoder", sub: "jwt", keywords: "jwt json web token decode" },
+      { icon: Binary, title: "Morse Code", tag: "Encode", tool: "encoder", sub: "morse", keywords: "morse code dots dashes translate" },
+      { icon: Binary, title: "Binary", tag: "Encode", tool: "encoder", sub: "binary", keywords: "binary base2 01 text converter" },
+      { icon: Binary, title: "Octal", tag: "Encode", tool: "encoder", sub: "octal", keywords: "octal base8 text converter" },
+    ],
+  },
+  {
+    label: "Hash",
+    icon: Hash,
+    features: [
+      { icon: Hash, title: "Text Hash", tag: "Hash", tool: "hasher", sub: "text-hash", keywords: "hash text md5 sha256 blake3" },
+      { icon: Hash, title: "File Hash", tag: "Hash", tool: "hasher", sub: "file-hash", keywords: "hash file integrity checksum" },
+      { icon: Hash, title: "All Algorithms", tag: "Hash", tool: "hasher", sub: "multi-hash", keywords: "multi hash all algorithms md5 sha blake3" },
+      { icon: ShieldCheck, title: "Verify Hash", tag: "Hash", tool: "hasher", sub: "verify", keywords: "verify hash integrity check match" },
+    ],
+  },
+  {
+    label: "Share",
+    icon: Radio,
+    features: [
+      { icon: Radio, title: "P2P Send", tag: "Network", tool: "p2p", keywords: "p2p send file nearby device local network" },
+      { icon: QrCode, title: "Web Portal", tag: "Network", tool: "p2p", keywords: "web portal qr code download browser" },
+      { icon: Lock, title: "Encrypted Transfer", tag: "Network", tool: "p2p", keywords: "encrypted transfer password protected secure" },
+    ],
+  },
 ];
 
-export default function Welcome({ onNavigate }: { onNavigate: (tool: Tool) => void }) {
+export default function Welcome({ onNavigate }: { onNavigate: (tool: Tool, sub?: string) => void }) {
   const [query, setQuery] = useState("");
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return features;
+  const filteredSections = useMemo(() => {
+    if (!query.trim()) return sections;
     const q = query.toLowerCase();
-    return features.filter(
-      (f) =>
-        f.title.toLowerCase().includes(q) ||
-        f.description.toLowerCase().includes(q) ||
-        f.keywords.includes(q)
-    );
+    return sections
+      .map((section) => ({
+        ...section,
+        features: section.features.filter(
+          (f) =>
+            f.title.toLowerCase().includes(q) ||
+            f.tag.toLowerCase().includes(q) ||
+            f.keywords.includes(q)
+        ),
+      }))
+      .filter((section) => section.features.length > 0);
   }, [query]);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-8">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={spring}
-        className="flex items-center gap-3"
-      >
-        <Sparkles className="w-8 h-8 text-blue-400" />
-        <h1 className="text-3xl font-semibold tracking-tight">TinyTools</h1>
-      </motion.div>
+    <div className="flex flex-col h-full gap-5">
+      <div className="flex items-center gap-3 pt-2">
+        <Sparkles className="w-7 h-7 text-blue-400 shrink-0" />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">TinyTools</h1>
+          <p className="text-white/40 text-xs">Lightweight tools for everyday tasks — 100% offline</p>
+        </div>
+      </div>
 
-      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1, ...spring }}
-        className="text-white/50 text-sm"
-      >
-        Lightweight tools for everyday tasks — 100% offline
-      </motion.p>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15, ...spring }}
-        className="relative w-full max-w-xs"
-      >
+      <div className="relative w-full max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input
           type="text"
-          placeholder="Search tools..."
+          placeholder="Search all tools..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-surface/50 backdrop-blur-xl text-sm text-white/90 placeholder:text-white/30 outline-none focus:border-border-hover transition-colors"
+          className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-surface/50 backdrop-blur-xl text-sm text-white/90 placeholder:text-white/30 outline-none focus:border-border-hover transition-colors"
         />
-      </motion.div>
-
-      <div className="grid grid-cols-4 gap-3 mt-4 max-w-3xl">
-        {filtered.map((feature, i) => {
-          const Icon = feature.icon;
-          return (
-            <motion.button
-              key={feature.title}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ delay: query ? 0 : 0.15 + i * 0.05, ...spring }}
-              onClick={() => onNavigate(feature.tool)}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-border bg-surface/50 backdrop-blur-xl hover:border-border-hover hover:bg-surface-hover transition-colors cursor-pointer text-left"
-            >
-              <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center">
-                <Icon className="w-4 h-4 text-white/70" />
-              </div>
-              <span className="text-xs font-medium text-center">{feature.title}</span>
-              <span className="text-[10px] text-white/30 text-center leading-relaxed">
-                {feature.description}
-              </span>
-            </motion.button>
-          );
-        })}
       </div>
 
-      {query && filtered.length === 0 && (
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-white/30 mt-4">
-          No tools match "{query}"
-        </motion.p>
-      )}
+      <div className="flex-1 overflow-y-auto pr-1 space-y-5">
+        {filteredSections.map((section, si) => {
+          const SectionIcon = section.icon;
+          return (
+            <motion.div
+              key={section.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: query ? 0 : 0.05 + si * 0.04, ...spring }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <SectionIcon className="w-3.5 h-3.5 text-white/30" />
+                <span className="text-[10px] text-white/30 uppercase tracking-wider font-medium">
+                  {section.label}
+                </span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {section.features.map((feature, fi) => {
+                  const Icon = feature.icon;
+                  return (
+                    <motion.button
+                      key={feature.title}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: query ? 0 : fi * 0.02, ...spring }}
+                      onClick={() => onNavigate(feature.tool, feature.sub)}
+                      className="group flex items-center gap-2.5 p-2.5 rounded-xl border border-border bg-surface/50 backdrop-blur-xl hover:border-border-hover hover:bg-surface-hover transition-colors cursor-pointer text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 group-hover:bg-white/10 transition-colors">
+                        <Icon className="w-3.5 h-3.5 text-white/60" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-white/80 truncate">
+                            {feature.title}
+                          </span>
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-white/5 text-white/30 shrink-0">
+                            {feature.tag}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-white/30 shrink-0 transition-colors" />
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          );
+        })}
+
+        {query && filteredSections.length === 0 && (
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-white/30 pt-8 text-center">
+            No tools match "{query}"
+          </motion.p>
+        )}
+      </div>
     </div>
   );
 }

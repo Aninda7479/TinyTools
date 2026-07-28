@@ -25,8 +25,8 @@ const algorithms = [
   { value: "xxh3", label: "XXH3", note: "Fast" },
 ];
 
-export default function HasherPage() {
-  const [active, setActive] = useState<SubTool>("text-hash");
+export default function HasherPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [active, setActive] = useState<SubTool>((defaultSub as SubTool) || "text-hash");
   const [algorithm, setAlgorithm] = useState("sha256");
   const [textInput, setTextInput] = useState("");
   const [textHash, setTextHash] = useState("");

@@ -330,3 +330,161 @@ pub fn decrypt_file_chacha(
     std::fs::write(&output_path, &plaintext).map_err(|e| e.to_string())?;
     Ok(format!("Decrypted to {}", output_path))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aes_text_roundtrip() {
+        let plaintext = "Hello, TinyTools!";
+        let passphrase = "super-secret-password";
+        let encrypted = encrypt_text_aes(plaintext.to_string(), passphrase.to_string(), "argon2".to_string()).unwrap();
+        assert_ne!(encrypted, plaintext);
+        let decrypted = decrypt_text_aes(encrypted, passphrase.to_string()).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_aes_text_pbkdf2_roundtrip() {
+        let plaintext = "PBKDF2 is fast!";
+        let passphrase = "my-password";
+        let encrypted = encrypt_text_aes(plaintext.to_string(), passphrase.to_string(), "pbkdf2".to_string()).unwrap();
+        let decrypted = decrypt_text_aes(encrypted, passphrase.to_string()).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_chacha_text_roundtrip() {
+        let plaintext = "ChaCha20-Poly1305 works!";
+        let passphrase = "chacha-secret";
+        let encrypted = encrypt_text_chacha(plaintext.to_string(), passphrase.to_string(), "argon2".to_string()).unwrap();
+        let decrypted = decrypt_text_chacha(encrypted, passphrase.to_string()).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_aes_wrong_passphrase_fails() {
+        let plaintext = "secret data";
+        let encrypted = encrypt_text_aes(plaintext.to_string(), "correct".to_string(), "argon2".to_string()).unwrap();
+        let result = decrypt_text_aes(encrypted, "wrong".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_chacha_wrong_passphrase_fails() {
+        let plaintext = "secret data";
+        let encrypted = encrypt_text_chacha(plaintext.to_string(), "correct".to_string(), "argon2".to_string()).unwrap();
+        let result = decrypt_text_chacha(encrypted, "wrong".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_aes_file_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("input.txt");
+        let encrypted = dir.path().join("encrypted.bin");
+        let decrypted = dir.path().join("decrypted.txt");
+        let data = b"File encryption test content";
+
+        std::fs::write(&input, data).unwrap();
+        encrypt_file_aes(
+            input.to_str().unwrap().to_string(),
+            encrypted.to_str().unwrap().to_string(),
+            "file-password".to_string(),
+            "argon2".to_string(),
+        ).unwrap();
+        decrypt_file_aes(
+            encrypted.to_str().unwrap().to_string(),
+            decrypted.to_str().unwrap().to_string(),
+            "file-password".to_string(),
+        ).unwrap();
+        assert_eq!(std::fs::read(&decrypted).unwrap(), data);
+    }
+
+    #[test]
+    fn test_chacha_file_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("input.txt");
+        let encrypted = dir.path().join("encrypted.bin");
+        let decrypted = dir.path().join("decrypted.txt");
+        let data = b"ChaCha file encryption test";
+
+        std::fs::write(&input, data).unwrap();
+        encrypt_file_chacha(
+            input.to_str().unwrap().to_string(),
+            encrypted.to_str().unwrap().to_string(),
+            "file-password".to_string(),
+            "argon2".to_string(),
+        ).unwrap();
+        decrypt_file_chacha(
+            encrypted.to_str().unwrap().to_string(),
+            decrypted.to_str().unwrap().to_string(),
+            "file-password".to_string(),
+        ).unwrap();
+        assert_eq!(std::fs::read(&decrypted).unwrap(), data);
+    }
+
+    #[test]
+    fn test_rot13_roundtrip() {
+        let input = "Hello, World!";
+        let encoded = encrypt_rot13(input.to_string()).unwrap();
+        assert_eq!(encoded, "Uryyb, Jbeyq!");
+        let decoded = encrypt_rot13(encoded).unwrap();
+        assert_eq!(decoded, input);
+    }
+
+    #[test]
+    fn test_caesar_shift() {
+        let input = "ABC";
+        let shifted = encrypt_caesar(input.to_string(), 3).unwrap();
+        assert_eq!(shifted, "DEF");
+        let back = encrypt_caesar(shifted, -3).unwrap();
+        assert_eq!(back, "ABC");
+    }
+
+    #[test]
+    fn test_caesar_shift_wraps() {
+        let input = "XYZ";
+        let shifted = encrypt_caesar(input.to_string(), 3).unwrap();
+        assert_eq!(shifted, "ABC");
+    }
+
+    #[test]
+    fn test_vigenere_encrypt() {
+        let input = "ATTACKATDAWN";
+        let key = "LEMON";
+        let encrypted = encrypt_vigenere(input.to_string(), key.to_string()).unwrap();
+        assert_eq!(encrypted, "LXFOPVEFRNHR");
+    }
+
+    #[test]
+    fn test_xor_roundtrip() {
+        let input = "secret message";
+        let key = "key123";
+        let encrypted = encrypt_xor(input.to_string(), key.to_string()).unwrap();
+        let decrypted = encrypt_xor(encrypted, key.to_string()).unwrap();
+        assert_eq!(decrypted, input);
+    }
+
+    #[test]
+    fn test_xor_empty_key_fails() {
+        let result = encrypt_xor("test".to_string(), "".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_pack_unpack_blob_roundtrip() {
+        let kdf = "argon2";
+        let salt = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let nonce = vec![10u8; 12];
+        let ciphertext = vec![42u8; 64];
+
+        let packed = pack_blob(kdf, &salt, &nonce, &ciphertext);
+        let (kdf_ver, s, n, c) = unpack_blob(&packed).unwrap();
+        assert_eq!(kdf_ver, KDF_ARGON2);
+        assert_eq!(s, &salt[..]);
+        assert_eq!(n, &nonce[..]);
+        assert_eq!(c, &ciphertext[..]);
+    }
+}

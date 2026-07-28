@@ -4,8 +4,8 @@ import { stripMetadata, redactRegions, addWatermark } from "../lib/tauri";
 
 type PrivacyTool = "strip-metadata" | "redact" | "watermark";
 
-export default function PrivacyPage() {
-  const [selectedTool, setSelectedTool] = useState<PrivacyTool>("strip-metadata");
+export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [selectedTool, setSelectedTool] = useState<PrivacyTool>((defaultSub as PrivacyTool) || "strip-metadata");
   const [watermarkText, setWatermarkText] = useState("WATERMARK");
   const [watermarkOpacity, setWatermarkOpacity] = useState(80);
   const [watermarkPosition, setWatermarkPosition] = useState("bottom-right");

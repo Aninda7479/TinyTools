@@ -20,9 +20,9 @@ interface SelectedFile {
   size: number;
 }
 
-export default function ImageProcess() {
+export default function ImageProcess({ defaultSub }: { defaultSub?: string } = {}) {
   const [file, setFile] = useState<SelectedFile | null>(null);
-  const [selectedOp, setSelectedOp] = useState("resize");
+  const [selectedOp, setSelectedOp] = useState(defaultSub || "resize");
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState("");
   const [resizeW, setResizeW] = useState(800);

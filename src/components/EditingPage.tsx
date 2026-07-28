@@ -4,8 +4,8 @@ import { smartCrop, expandCanvas, splitImage } from "../lib/tauri";
 
 type EditTool = "crop" | "expand" | "split" | "stitch";
 
-export default function EditingPage() {
-  const [selectedTool, setSelectedTool] = useState<EditTool>("crop");
+export default function EditingPage({ defaultSub }: { defaultSub?: string } = {}) {
+  const [selectedTool, setSelectedTool] = useState<EditTool>((defaultSub as EditTool) || "crop");
   const [cropW, setCropW] = useState(800);
   const [cropH, setCropH] = useState(600);
   const [gravity, setGravity] = useState("center");

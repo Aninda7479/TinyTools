@@ -231,3 +231,101 @@ pub fn verify_file_hash(
         expected,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_hash_text_md5() {
+        let result = hash_text("hello".to_string(), "md5".to_string()).unwrap();
+        assert_eq!(result, "5d41402abc4b2a76b9719d911017c592");
+    }
+
+    #[test]
+    fn test_hash_text_sha256() {
+        let result = hash_text("hello".to_string(), "sha256".to_string()).unwrap();
+        assert_eq!(result, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    }
+
+    #[test]
+    fn test_hash_text_sha512() {
+        let result = hash_text("hello".to_string(), "sha512".to_string()).unwrap();
+        assert!(result.starts_with("9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca7"));
+        assert_eq!(result.len(), 128);
+    }
+
+    #[test]
+    fn test_hash_text_blake3() {
+        let result = hash_text("hello".to_string(), "blake3".to_string()).unwrap();
+        assert_eq!(result, "ea8f163db38682925e4491c5e58d4bb3506ef8c14eb78a86e908c5624a67200f");
+    }
+
+    #[test]
+    fn test_hash_text_crc32() {
+        let result = hash_text("hello".to_string(), "crc32".to_string()).unwrap();
+        assert_eq!(result.len(), 8);
+        assert_eq!(result, "3610a686");
+    }
+
+    #[test]
+    fn test_hash_text_unknown_algorithm() {
+        let result = hash_text("hello".to_string(), "quantum".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_hash_file_sha256() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(b"hello world").unwrap();
+        drop(f);
+
+        let result = hash_file(path.to_str().unwrap().to_string(), "sha256".to_string()).unwrap();
+        assert_eq!(result.hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        assert_eq!(result.file_size, 11);
+    }
+
+    #[test]
+    fn test_hash_file_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(b"tinytools").unwrap();
+        drop(f);
+
+        let result = hash_file_all(path.to_str().unwrap().to_string()).unwrap();
+        assert_eq!(result.md5, "2b8ca86a0770830e1ffeb0774a75978f");
+        assert_eq!(result.sha256.len(), 64);
+        assert_eq!(result.sha512.len(), 128);
+        assert_eq!(result.blake3.len(), 64);
+        assert_eq!(result.file_size, 9);
+    }
+
+    #[test]
+    fn test_verify_file_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("verify.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(b"test data").unwrap();
+        drop(f);
+
+        let hash_result = hash_file(path.to_str().unwrap().to_string(), "md5".to_string()).unwrap();
+        let verified = verify_file_hash(
+            path.to_str().unwrap().to_string(),
+            "md5".to_string(),
+            hash_result.hash.clone(),
+        ).unwrap();
+        assert!(verified.matches);
+        assert_eq!(verified.computed, hash_result.hash);
+
+        let bad = verify_file_hash(
+            path.to_str().unwrap().to_string(),
+            "md5".to_string(),
+            "00000000000000000000000000000000".to_string(),
+        ).unwrap();
+        assert!(!bad.matches);
+    }
+}
