@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, X, ArrowDown } from "lucide-react";
-import { pickFiles } from "../lib/tauri";
+import { pickFiles, smartCompress } from "../lib/tauri";
 
 const springTransition = { type: "spring", stiffness: 300, damping: 30 };
 
@@ -22,6 +22,8 @@ function formatBytes(bytes: number): string {
 export default function ImageCompress() {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [quality, setQuality] = useState(80);
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const openPicker = useCallback(async () => {
     const picked = await pickFiles([{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp"] }]);
@@ -31,6 +33,30 @@ export default function ImageCompress() {
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCompress = async () => {
+    if (files.length === 0) return;
+    setLoading(true);
+    setStatus("Compressing...");
+    try {
+      let success = 0;
+      let failed = 0;
+      for (const f of files) {
+        try {
+          const out = f.path.replace(/\.[^.]+$/, "_compressed.jpg");
+          await smartCompress(f.path, out, quality);
+          success++;
+        } catch {
+          failed++;
+        }
+      }
+      setStatus(`Done — ${success} compressed${failed ? `, ${failed} failed` : ""}`);
+    } catch (e) {
+      setStatus(`Error: ${e}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -116,11 +142,17 @@ export default function ImageCompress() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={springTransition}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+            onClick={handleCompress}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors disabled:opacity-50"
           >
-            <ArrowDown className="w-4 h-4" />
-            Compress {files.length} image{files.length > 1 ? "s" : ""}
+            {loading ? <span className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full" /> : <ArrowDown className="w-4 h-4" />}
+            {loading ? "Compressing..." : `Compress ${files.length} image${files.length > 1 ? "s" : ""}`}
           </motion.button>
+
+          {status && (
+            <p className="text-xs text-blue-300 text-center">{status}</p>
+          )}
         </motion.div>
       )}
     </div>

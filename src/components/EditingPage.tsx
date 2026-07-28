@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ToolPage, { OptionRow, OptionSlider, OptionSelect } from "./ToolPage";
-import { smartCrop, expandCanvas, splitImage } from "../lib/tauri";
+import { smartCrop, expandCanvas, splitImage, stitchImages } from "../lib/tauri";
 
 type EditTool = "crop" | "expand" | "split" | "stitch";
 
@@ -51,6 +51,12 @@ export default function EditingPage({ defaultSub }: { defaultSub?: string } = {}
           const dir = f.path.substring(0, f.path.lastIndexOf("\\") || f.path.lastIndexOf("/"));
           result = await splitImage(f.path, dir + "/split", splitRows, splitCols);
           break;
+        case "stitch": {
+          const paths = files.map((f: { name: string; path: string }) => f.path);
+          const outDir = paths[0].substring(0, paths[0].lastIndexOf("\\") || paths[0].lastIndexOf("/"));
+          result = await stitchImages(paths, outDir + "/stitched.png", stitchDir);
+          break;
+        }
       }
       setStatus(result?.message || "Done");
     } catch (e) {
@@ -59,7 +65,7 @@ export default function EditingPage({ defaultSub }: { defaultSub?: string } = {}
   };
 
   return (
-    <ToolPage title="Editing & Layout" description="Crop, pad, split, and combine images" onProcess={handleProcess}>
+    <ToolPage title="Editing & Layout" description="Crop, pad, split, and combine images" onProcess={handleProcess} multiFile={selectedTool === "stitch"}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (
