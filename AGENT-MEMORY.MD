@@ -176,6 +176,7 @@ Offline-first utility toolkit — no cloud, no Python, no ONNX runtime.
 - `processImage()` accepts `params?: Record<string, unknown>` (JSON stringified)
 - `decryptPdf()` and `unwrapPdf()` both accept `password` param
 - `addImageWatermark()` accepts optional `position` param
+- **File picker utilities:** `pickFile()`, `pickFiles()`, `pickDirectory()`, `saveFile()` — use `@tauri-apps/plugin-dialog` for native OS file dialogs (required because Tauri 2 `<input type="file">` does NOT expose `.path` on File objects)
 
 ### `lib/p2p-api.ts`
 - TypeScript bindings for all 12 P2P Tauri commands
@@ -252,10 +253,15 @@ npx tsc --noEmit
 11. **Web portal serves on port 0 (OS-assigned)** — actual port returned in `PortalResult.port`
 12. **Welcome page sub-tool IDs must match page types exactly** — e.g. `"smart-sharpen"` not `"sharpen"`, `"strip-metadata"` not `"strip"`, `"vectorize"` not `"svg"`
 13. **Adding new feature to Welcome** — add to appropriate `sections` array in `Welcome.tsx` with correct `tool` and `sub` values, and ensure the target page accepts `defaultSub` prop
+14. **Tauri 2 `<input type="file">` does NOT expose `.path`** — `files[0].path` is always `""`. Always use `@tauri-apps/plugin-dialog` (`pickFile()`/`pickFiles()`) for native file selection instead. This affects ALL tools that need real file paths.
+15. **`tauri-plugin-dialog`** requires both Rust dep (`tauri-plugin-dialog = "2"`) + JS dep (`@tauri-apps/plugin-dialog`) + capability permission (`"dialog:default"`)
 
 ---
 
 ## Git History (recent)
+- `2cff393` — fix: add tauri-plugin-dialog for native file picker across all tools (PDF, batch, encrypt, hash, P2P, image compress/process)
+- `038e86b` — feat: ErrorBoundary rewritten as floating modal popup
+- `ed43399` — fix: P2P module compilation (5 errors: derive, imports, TcpListener, receiver)
 - `2688a47` — fix: rewrite background removal (BFS flood bug, percentile+Otsu, S-curve alpha)
 - `8d929a6` — fix: replace 6 stub functions (encrypt_pdf, add_watermark, sepia, smart-sharpen, process_image, strip_metadata)
 - `ab3fc09` — feat: KDF selection wired through encryption
