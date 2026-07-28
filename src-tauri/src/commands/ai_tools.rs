@@ -21,7 +21,6 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
     let mut bg_b: Vec<u8> = Vec::new();
 
     let border = 8u32;
-    // Top and bottom edges
     for x in 0..w {
         for d in 0..border {
             if d >= h { break; }
@@ -31,7 +30,6 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
             bg_r.push(pb[0]); bg_g.push(pb[1]); bg_b.push(pb[2]);
         }
     }
-    // Left and right edges
     for y in 0..h {
         for d in 0..border {
             if d >= w { break; }
@@ -49,7 +47,8 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
     let bg_color = [bg_r[mid], bg_g[mid], bg_b[mid]];
 
     // ── Step 2: Compute per-pixel distance to background ──
-    let mut dist_map: Vec<f64> = Vec::with_capacity((w * h) as usize);
+    let total_px = (w * h) as usize;
+    let mut dist_map: Vec<f64> = Vec::with_capacity(total_px);
     let mut max_dist: f64 = 0.0;
 
     for y in 0..h {
@@ -60,31 +59,34 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
             if d > max_dist { max_dist = d; }
         }
     }
-
-    // Avoid division by zero
     if max_dist < 1.0 { max_dist = 1.0; }
 
-    // ── Step 3: Adaptive thresholding with Otsu-like method ──
-    // Build histogram of distances
+    // ── Step 3: Find threshold using percentile + Otsu ──
+    let mut sorted_dists = dist_map.clone();
+    sorted_dists.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let bg_pct = 0.60;
+    let thresh_idx = (total_px as f64 * bg_pct).min(total_px as f64 - 1.0) as usize;
+    let percentile_thresh = sorted_dists[thresh_idx];
+
+    // Also compute Otsu for comparison
     let bins = 256usize;
     let mut hist = vec![0u32; bins];
     for &d in &dist_map {
         let bin = ((d / max_dist) * (bins as f64 - 1.0)) as usize;
         hist[bin] += 1;
     }
-    let total = dist_map.len() as f64;
-
-    // Otsu's method: find threshold that maximizes inter-class variance
+    let total_f = total_px as f64;
     let mut sum_all: f64 = 0.0;
     for i in 0..bins { sum_all += i as f64 * hist[i] as f64; }
     let mut sum_bg: f64 = 0.0;
     let mut w_bg: f64 = 0.0;
-    let mut best_thresh = 0usize;
+    let mut best_otsu = 0usize;
     let mut best_var: f64 = 0.0;
     for i in 0..bins {
         w_bg += hist[i] as f64;
         if w_bg < 1.0 { continue; }
-        let w_fg = total - w_bg;
+        let w_fg = total_f - w_bg;
         if w_fg < 1.0 { break; }
         sum_bg += i as f64 * hist[i] as f64;
         let mean_bg = sum_bg / w_bg;
@@ -92,96 +94,40 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
         let variance = w_bg * w_fg * (mean_bg - mean_fg).powi(2);
         if variance > best_var {
             best_var = variance;
-            best_thresh = i;
+            best_otsu = i;
         }
     }
+    let otsu_thresh = best_otsu as f64 / (bins as f64 - 1.0) * max_dist;
 
-    // The threshold in normalized distance space
-    let otsu_threshold = best_thresh as f64 / (bins as f64 - 1.0);
+    let threshold = percentile_thresh.max(otsu_thresh).max(max_dist * 0.02);
+    let transition_half = max_dist * 0.12;
 
-    // ── Step 4: Generate alpha mask with smooth transition ──
-    // Foreground = high distance, background = low distance
-    // We want background (low dist) to be transparent
-    let transition_width = 0.15; // 15% of range for smooth transition
-
-    let mut fg_mask: Vec<bool> = vec![false; (w * h) as usize];
-    let mut fg_queue: std::collections::VecDeque<(u32, u32)> = std::collections::VecDeque::new();
-
-    for y in 0..h {
-        for x in 0..w {
-            let i = (y * w + x) as usize;
-            let norm_dist = dist_map[i] / max_dist;
-            // Use Otsu threshold with some margin — only definitely-foreground pixels are seeds
-            if norm_dist > otsu_threshold + 0.05 {
-                fg_mask[i] = true;
-                if x > 0 && x < w - 1 && y > 0 && y < h - 1 {
-                    fg_queue.push_back((x, y));
-                }
-            }
-        }
-    }
-
-    // Expand foreground mask via BFS using gradient similarity
-    while let Some((x, y)) = fg_queue.pop_front() {
-        let dirs: [(i32, i32); 8] = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)];
-        let parent = *rgba.get_pixel(x, y);
-        for &(dx, dy) in &dirs {
-            let nx = x as i32 + dx;
-            let ny = y as i32 + dy;
-            if nx < 0 || ny < 0 || nx >= w as i32 || ny >= h as i32 { continue; }
-            let nx = nx as u32;
-            let ny = ny as u32;
-            let ni = (ny * w + nx) as usize;
-            if fg_mask[ni] { continue; }
-            let p = *rgba.get_pixel(nx, ny);
-            let norm_dist = dist_map[ni] / max_dist;
-            // Accept if: (a) reasonably far from bg, or (b) very similar to known foreground neighbor
-            let dist_to_parent = perceptual_dist(p, [parent[0], parent[1], parent[2]]);
-            let is_similar_to_fg = dist_to_parent < 40.0;
-            let is_not_bg = norm_dist > otsu_threshold - 0.1;
-            if is_not_bg || is_similar_to_fg {
-                fg_mask[ni] = true;
-                fg_queue.push_back((nx, ny));
-            }
-        }
-    }
-
-    // ── Step 5: Generate output with feathered alpha ──
+    // ── Step 4: Generate alpha mask directly from distance map ──
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) as usize;
             let pixel = *rgba.get_pixel(x, y);
-            let norm_dist = dist_map[i] / max_dist;
+            let d = dist_map[i];
 
-            let alpha = if fg_mask[i] {
+            let alpha = if d >= threshold + transition_half {
                 255u8
+            } else if d <= threshold - transition_half {
+                0u8
             } else {
-                // Smooth transition zone
-                let lo = otsu_threshold - transition_width;
-                let hi = otsu_threshold;
-                if norm_dist <= lo {
-                    0 // Definitely background
-                } else if norm_dist >= hi {
-                    // In transition zone — smooth ramp
-                    let t = (norm_dist - lo) / (hi - lo);
-                    (t * 255.0).min(255.0) as u8
-                } else {
-                    // Very close to threshold — soft edge
-                    let t = (norm_dist - lo) / (hi - lo);
-                    (t * 200.0).min(200.0) as u8
-                }
+                let t = ((d - (threshold - transition_half)) / (2.0 * transition_half)).clamp(0.0, 1.0);
+                let t = t * t * (3.0 - 2.0 * t);
+                (t * 255.0) as u8
             };
 
             out.put_pixel(x, y, Rgba([pixel[0], pixel[1], pixel[2], alpha]));
         }
     }
 
-    // ── Step 6: Edge cleanup — remove isolated foreground specks ──
+    // ── Step 5: Edge cleanup — remove isolated foreground specks ──
     for y in 1..h-1 {
         for x in 1..w-1 {
             let alpha = out.get_pixel(x, y)[3];
             if alpha > 128 {
-                // Count transparent neighbors
                 let mut transparent = 0;
                 for dy in -1i32..=1 {
                     for dx in -1i32..=1 {
@@ -192,8 +138,29 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
                     }
                 }
                 if transparent >= 6 {
-                    // Isolated speck — make transparent
                     out.put_pixel(x, y, Rgba([0, 0, 0, 0]));
+                }
+            }
+        }
+    }
+
+    // ── Step 6: Fill isolated background holes ──
+    for y in 1..h-1 {
+        for x in 1..w-1 {
+            let alpha = out.get_pixel(x, y)[3];
+            if alpha < 128 {
+                let mut opaque = 0;
+                for dy in -1i32..=1 {
+                    for dx in -1i32..=1 {
+                        if dx == 0 && dy == 0 { continue; }
+                        let nx = (x as i32 + dx) as u32;
+                        let ny = (y as i32 + dy) as u32;
+                        if out.get_pixel(nx, ny)[3] > 128 { opaque += 1; }
+                    }
+                }
+                if opaque >= 6 {
+                    let pixel = *rgba.get_pixel(x, y);
+                    out.put_pixel(x, y, Rgba([pixel[0], pixel[1], pixel[2], 255]));
                 }
             }
         }
@@ -201,11 +168,10 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
 
     out.save(&output_path).map_err(|e| e.to_string())?;
 
-    let fg_pixels = fg_mask.iter().filter(|&&b| b).count();
-    let total_pixels = (w * h) as usize;
-    let pct = (fg_pixels as f64 / total_pixels as f64 * 100.0) as u32;
-    let msg = format!("Background removed — {}% foreground (bg: [{},{},{}], otsu: {:.2})",
-        pct, bg_color[0], bg_color[1], bg_color[2], otsu_threshold);
+    let fg_pixels = dist_map.iter().filter(|d| **d > threshold + transition_half).count();
+    let pct = (fg_pixels as f64 / total_px as f64 * 100.0) as u32;
+    let msg = format!("Background removed — {}% foreground (bg: [{},{},{}], thresh: {:.1}, otsu: {:.1})",
+        pct, bg_color[0], bg_color[1], bg_color[2], threshold, otsu_thresh);
     Ok(ToolResult { success: true, output_path: Some(output_path), message: msg })
 }
 
@@ -364,4 +330,189 @@ pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32) -
 
     out.save(&output_path).map_err(|e| e.to_string())?;
     Ok(ToolResult { success: true, output_path: Some(output_path), message: "Depth blur applied".into() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageBuffer, Rgb};
+
+    fn create_simple_test_image() -> String {
+        let mut img: image::RgbImage = ImageBuffer::new(200, 200);
+        for y in 0..200 {
+            for x in 0..200 {
+                img.put_pixel(x, y, Rgb([255u8, 255, 255]));
+            }
+        }
+        let cx = 100.0f64;
+        let cy = 100.0f64;
+        let r = 40.0f64;
+        for y in 0..200 {
+            for x in 0..200 {
+                let dx = x as f64 - cx;
+                let dy = y as f64 - cy;
+                if dx * dx + dy * dy <= r * r {
+                    img.put_pixel(x, y, Rgb([200u8, 50, 50]));
+                }
+            }
+        }
+        let path = std::env::temp_dir().join("tinytools_test_simple.png");
+        img.save(&path).unwrap();
+        path.to_string_lossy().to_string()
+    }
+
+    fn create_gradient_test_image() -> String {
+        let mut img: image::RgbImage = ImageBuffer::new(400, 300);
+        for y in 0..300 {
+            for x in 0..400 {
+                let r = (180.0 + 40.0 * (y as f64 / 300.0)) as u8;
+                let g = (200.0 + 30.0 * (x as f64 / 400.0)) as u8;
+                let b = (220.0 - 20.0 * (y as f64 / 300.0)) as u8;
+                img.put_pixel(x, y, Rgb([r, g, b]));
+            }
+        }
+        for y in 60..140 {
+            for x in 160..240 {
+                let dx = x as f64 - 200.0;
+                let dy = y as f64 - 100.0;
+                if dx * dx + dy * dy <= 40.0 * 40.0 {
+                    img.put_pixel(x, y, Rgb([210u8, 170, 140]));
+                }
+            }
+        }
+        for y in 135..250 {
+            for x in 170..230 {
+                img.put_pixel(x, y, Rgb([80u8, 80, 180]));
+            }
+        }
+        for y in 150..220 {
+            for x in 140..170 {
+                img.put_pixel(x, y, Rgb([210u8, 170, 140]));
+            }
+        }
+        for y in 150..220 {
+            for x in 230..260 {
+                img.put_pixel(x, y, Rgb([210u8, 170, 140]));
+            }
+        }
+        let path = std::env::temp_dir().join("tinytools_test_portrait.png");
+        img.save(&path).unwrap();
+        path.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn test_bg_removal_simple() {
+        let input = create_simple_test_image();
+        let output = std::env::temp_dir().join("tinytools_test_simple_out.png");
+        let result = remove_background(input, output.to_string_lossy().to_string());
+        match result {
+            Ok(r) => {
+                println!("SUCCESS: {}", r.message);
+                assert!(r.success);
+                assert!(r.output_path.is_some());
+                let out_img = image::open(&output).unwrap();
+                let rgba = out_img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                assert_eq!(w, 200);
+                assert_eq!(h, 200);
+                let mut transparent = 0usize;
+                for y in 0..h {
+                    for x in 0..w {
+                        if rgba.get_pixel(x, y)[3] < 128 {
+                            transparent += 1;
+                        }
+                    }
+                }
+                let total = (w * h) as usize;
+                let bg_pct = transparent as f64 / total as f64 * 100.0;
+                println!("Transparent pixels: {}/{} ({:.1}%)", transparent, total, bg_pct);
+                assert!(bg_pct > 30.0, "Expected >30% transparent, got {:.1}%", bg_pct);
+            }
+            Err(e) => panic!("FAILED: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_bg_removal_portrait() {
+        let input = create_gradient_test_image();
+        let output = std::env::temp_dir().join("tinytools_test_portrait_out.png");
+        let result = remove_background(input, output.to_string_lossy().to_string());
+        match result {
+            Ok(r) => {
+                println!("SUCCESS: {}", r.message);
+                assert!(r.success);
+                let out_img = image::open(&output).unwrap();
+                let rgba = out_img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                let mut fg_count = 0u64;
+                let mut bg_count = 0u64;
+                for y in 0..h {
+                    for x in 0..w {
+                        if rgba.get_pixel(x, y)[3] > 128 {
+                            fg_count += 1;
+                        } else {
+                            bg_count += 1;
+                        }
+                    }
+                }
+                let total = (w * h) as f64;
+                println!("Foreground: {} ({:.1}%)", fg_count, fg_count as f64 / total * 100.0);
+                println!("Background: {} ({:.1}%)", bg_count, bg_count as f64 / total * 100.0);
+                let fg_pct = fg_count as f64 / total * 100.0;
+                assert!(fg_pct > 5.0 && fg_pct < 80.0, "Foreground percentage out of range: {:.1}%", fg_pct);
+            }
+            Err(e) => panic!("FAILED: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_bg_removal_with_real_image() {
+        let path = "C:/Users/anind/TestImages/test_simple.png";
+        if !std::path::Path::new(path).exists() {
+            eprintln!("Skipping real image test — file not found");
+            return;
+        }
+        let output = std::env::temp_dir().join("tinytools_test_real_out.png");
+        let result = remove_background(path.to_string(), output.to_string_lossy().to_string());
+        match result {
+            Ok(r) => {
+                println!("SUCCESS: {}", r.message);
+                assert!(r.success);
+            }
+            Err(e) => panic!("FAILED: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_bg_removal_real_portrait() {
+        let path = "C:/Users/anind/TestImages/test_portrait.png";
+        if !std::path::Path::new(path).exists() {
+            eprintln!("Skipping real portrait test — file not found");
+            return;
+        }
+        let output = std::env::temp_dir().join("tinytools_test_real_portrait_out.png");
+        let result = remove_background(path.to_string(), output.to_string_lossy().to_string());
+        match result {
+            Ok(r) => {
+                println!("SUCCESS: {}", r.message);
+                assert!(r.success);
+                let out_img = image::open(&output).unwrap();
+                let rgba = out_img.to_rgba8();
+                let (w, h) = rgba.dimensions();
+                let mut fg_count = 0u64;
+                let mut total = 0u64;
+                for y in 0..h {
+                    for x in 0..w {
+                        total += 1;
+                        if rgba.get_pixel(x, y)[3] > 128 {
+                            fg_count += 1;
+                        }
+                    }
+                }
+                let fg_pct = fg_count as f64 / total as f64 * 100.0;
+                println!("Foreground: {} ({:.1}%)", fg_count, fg_pct);
+            }
+            Err(e) => panic!("FAILED: {}", e),
+        }
+    }
 }
