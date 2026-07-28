@@ -6,7 +6,8 @@ import {
   Paintbrush, Minimize, FileUp, Stamp, ArrowUpDown, RotateCw, Crop,
   Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
   Gauge, Zap, SplitSquareHorizontal, Combine, ChevronRight, Palette,
-  ShieldCheck, FileLock,
+  ShieldCheck, FileLock, Film, Merge, VolumeX, Volume2,
+  Image as ImageIcon, Subtitles,
 } from "lucide-react";
 import type { Tool } from "./Sidebar";
 
@@ -128,6 +129,31 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
       { icon: Radio, title: "P2P Send", tag: "Network", tool: "p2p", keywords: "p2p send file nearby device local network" },
       { icon: QrCode, title: "Web Portal", tag: "Network", tool: "p2p", keywords: "web portal qr code download browser" },
       { icon: Lock, title: "Encrypted Transfer", tag: "Network", tool: "p2p", keywords: "encrypted transfer password protected secure" },
+    ],
+  },
+  {
+    label: "Video",
+    icon: Film,
+    features: [
+      { icon: Info, title: "Video Info", tag: "Info", tool: "video", sub: "info", keywords: "video info metadata codec bitrate fps" },
+      { icon: ArrowUpDown, title: "Compress", tag: "Compress", tool: "video", sub: "compress", keywords: "video compress reduce size quality" },
+      { icon: ArrowUpDown, title: "Resize", tag: "Compress", tool: "video", sub: "resize", keywords: "video resize 1080p 720p 480p scale" },
+      { icon: RefreshCw, title: "Aspect Ratio", tag: "Compress", tool: "video", sub: "aspect", keywords: "aspect ratio 16:9 9:16 1:1 vertical horizontal" },
+      { icon: Scissors, title: "Trim / Cut", tag: "Edit", tool: "video", sub: "trim", keywords: "video trim cut lossless precision" },
+      { icon: Merge, title: "Merge Clips", tag: "Edit", tool: "video", sub: "merge", keywords: "video merge join combine clips" },
+      { icon: Crop, title: "Crop Frame", tag: "Edit", tool: "video", sub: "crop", keywords: "video crop frame remove black bars" },
+      { icon: RotateCw, title: "Rotate", tag: "Edit", tool: "video", sub: "rotate", keywords: "video rotate 90 180 270 fix sideways" },
+      { icon: RefreshCw, title: "Mirror / Flip", tag: "Edit", tool: "video", sub: "mirror", keywords: "video mirror flip horizontal vertical" },
+      { icon: Film, title: "Convert Format", tag: "Format", tool: "video", sub: "format", keywords: "video convert mp4 mkv webm avi mov" },
+      { icon: Volume2, title: "Extract Audio", tag: "Audio", tool: "video", sub: "extract-audio", keywords: "extract audio strip mp3 wav aac" },
+      { icon: VolumeX, title: "Mute Video", tag: "Audio", tool: "video", sub: "mute", keywords: "mute video remove audio silent" },
+      { icon: Volume2, title: "Replace Audio", tag: "Audio", tool: "video", sub: "replace-audio", keywords: "replace audio swap custom track" },
+      { icon: ImageIcon, title: "Video → GIF", tag: "GIF", tool: "video", sub: "to-gif", keywords: "video to gif high quality palette" },
+      { icon: Film, title: "GIF → Video", tag: "GIF", tool: "video", sub: "from-gif", keywords: "gif to video mp4 convert lightweight" },
+      { icon: Gauge, title: "Speed Control", tag: "Advanced", tool: "video", sub: "speed", keywords: "video speed slow motion fast forward" },
+      { icon: Stamp, title: "Watermark", tag: "Advanced", tool: "video", sub: "watermark", keywords: "video watermark text overlay" },
+      { icon: Subtitles, title: "Burn Subtitles", tag: "Advanced", tool: "video", sub: "subtitles", keywords: "burn subtitles srt vtt embed" },
+      { icon: ImageIcon, title: "Frame Extract", tag: "Advanced", tool: "video", sub: "frames", keywords: "extract frames png jpg snapshot" },
     ],
   },
 ];
