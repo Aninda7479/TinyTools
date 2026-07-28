@@ -10,6 +10,7 @@ import PrivacyPage from "./components/PrivacyPage";
 import EditingPage from "./components/EditingPage";
 import ConversionPage from "./components/ConversionPage";
 import BatchPage from "./components/BatchPage";
+import PdfToolsPage from "./components/PdfToolsPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -27,6 +28,7 @@ function AppInner() {
       case "qr": return <QrGenerator key="qr" />;
       case "process": return <ImageProcess key="process" />;
       case "batch": return <BatchPage key="batch" />;
+      case "pdf": return <PdfToolsPage key="pdf" />;
       default: return <Welcome key="welcome" onNavigate={setActiveTool} />;
     }
   };

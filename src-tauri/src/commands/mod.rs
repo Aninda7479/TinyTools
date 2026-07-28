@@ -2,6 +2,7 @@ pub mod ai_tools;
 pub mod batch;
 pub mod compression;
 pub mod editing;
+pub mod pdf_tools;
 pub mod privacy;
 
 use qrcode::QrCode;

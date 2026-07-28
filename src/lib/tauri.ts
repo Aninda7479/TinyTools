@@ -93,3 +93,50 @@ export async function batchConvert(paths: string[], outputDir: string, targetFor
 export async function batchWatermark(paths: string[], outputDir: string, text: string, opacity: number): Promise<BatchResult> {
   return invoke<BatchResult>("batch_watermark", { inputPaths: paths, outputDir, text, opacity });
 }
+
+// PDF Tools
+export async function getPdfInfo(input: string): Promise<ToolResult> {
+  return invoke<ToolResult>("get_pdf_info", { inputPath: input });
+}
+export async function mergePdfs(inputs: string[], output: string): Promise<ToolResult> {
+  return invoke<ToolResult>("merge_pdfs", { inputPaths: inputs, outputPath: output });
+}
+export async function splitPdf(input: string, outputDir: string, pages?: string): Promise<ToolResult> {
+  return invoke<ToolResult>("split_pdf", { inputPath: input, outputDir, pages: pages ?? null });
+}
+export async function reorderPages(input: string, output: string, newOrder: number[]): Promise<ToolResult> {
+  return invoke<ToolResult>("reorder_pages", { inputPath: input, outputPath: output, newOrder });
+}
+export async function rotatePages(input: string, output: string, pages?: string, angle: number = 90): Promise<ToolResult> {
+  return invoke<ToolResult>("rotate_pages", { inputPath: input, outputPath: output, pages: pages ?? null, angle });
+}
+export async function cropPages(input: string, output: string, pages?: string, top: number = 0, bottom: number = 0, left: number = 0, right: number = 0): Promise<ToolResult> {
+  return invoke<ToolResult>("crop_pages", { inputPath: input, outputPath: output, pages: pages ?? null, top, bottom, left, right });
+}
+export async function deletePages(input: string, output: string, pagesToDelete: number[]): Promise<ToolResult> {
+  return invoke<ToolResult>("delete_pages", { inputPath: input, outputPath: output, pagesToDelete });
+}
+export async function imagesToPdf(inputs: string[], output: string, margin: number = 20): Promise<ToolResult> {
+  return invoke<ToolResult>("images_to_pdf", { inputPaths: inputs, outputPath: output, margin });
+}
+export async function extractPdfText(input: string): Promise<ToolResult> {
+  return invoke<ToolResult>("extract_text", { inputPath: input });
+}
+export async function encryptPdf(input: string, output: string, userPassword: string, ownerPassword: string): Promise<ToolResult> {
+  return invoke<ToolResult>("encrypt_pdf", { inputPath: input, outputPath: output, userPassword, ownerPassword });
+}
+export async function decryptPdf(input: string, output: string): Promise<ToolResult> {
+  return invoke<ToolResult>("decrypt_pdf", { inputPath: input, outputPath: output });
+}
+export async function compressPdf(input: string, output: string): Promise<ToolResult> {
+  return invoke<ToolResult>("compress_pdf", { inputPath: input, outputPath: output });
+}
+export async function flattenPdf(input: string, output: string): Promise<ToolResult> {
+  return invoke<ToolResult>("flatten_pdf", { inputPath: input, outputPath: output });
+}
+export async function addPdfWatermark(input: string, output: string, text: string, fontSize: number, opacity: number, angle: number): Promise<ToolResult> {
+  return invoke<ToolResult>("add_pdf_watermark", { inputPath: input, outputPath: output, text, fontSize, opacity, angle });
+}
+export async function addPageNumbers(input: string, output: string, fontSize: number = 12, position: string = "bottom-center"): Promise<ToolResult> {
+  return invoke<ToolResult>("add_page_numbers", { inputPath: input, outputPath: output, fontSize, position });
+}

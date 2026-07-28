@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
-import { Sparkles, Image, QrCode, Wand2, Brain, Shield, Scissors, RefreshCw, Layers } from "lucide-react";
+import { Sparkles, Image, QrCode, Wand2, Brain, Shield, Scissors, RefreshCw, Layers, FileText } from "lucide-react";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-export type Tool = "welcome" | "compress" | "qr" | "process" | "ai" | "privacy" | "editing" | "conversion" | "batch";
+export type Tool = "welcome" | "compress" | "qr" | "process" | "ai" | "privacy" | "editing" | "conversion" | "batch" | "pdf";
 
 interface SidebarProps {
   activeTool: Tool;
@@ -16,6 +16,7 @@ const tools: { id: Tool; icon: typeof Image; label: string }[] = [
   { id: "editing", icon: Scissors, label: "Editing" },
   { id: "compress", icon: Image, label: "Compress" },
   { id: "conversion", icon: RefreshCw, label: "Convert" },
+  { id: "pdf", icon: FileText, label: "PDF Tools" },
   { id: "qr", icon: QrCode, label: "QR Code" },
   { id: "process", icon: Wand2, label: "Process" },
   { id: "batch", icon: Layers, label: "Batch" },

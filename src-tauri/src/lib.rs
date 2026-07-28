@@ -39,6 +39,22 @@ pub fn run() {
             commands::batch::batch_resize,
             commands::batch::batch_convert,
             commands::batch::batch_watermark,
+            // PDF Tools
+            commands::pdf_tools::get_pdf_info,
+            commands::pdf_tools::merge_pdfs,
+            commands::pdf_tools::split_pdf,
+            commands::pdf_tools::reorder_pages,
+            commands::pdf_tools::rotate_pages,
+            commands::pdf_tools::crop_pages,
+            commands::pdf_tools::delete_pages,
+            commands::pdf_tools::images_to_pdf,
+            commands::pdf_tools::extract_text,
+            commands::pdf_tools::encrypt_pdf,
+            commands::pdf_tools::decrypt_pdf,
+            commands::pdf_tools::compress_pdf,
+            commands::pdf_tools::flatten_pdf,
+            commands::pdf_tools::add_pdf_watermark,
+            commands::pdf_tools::add_page_numbers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running TinyTools");
