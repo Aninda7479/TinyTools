@@ -85,6 +85,9 @@ pub fn run() {
             commands::encoder::binary_to_text,
             commands::encoder::text_to_octal,
             commands::encoder::octal_to_text,
+            commands::encoder::encode_file,
+            commands::encoder::decode_file,
+            commands::encoder::decode_text_to_file,
             // Hasher
             commands::hasher::hash_text,
             commands::hasher::hash_file,

@@ -306,6 +306,18 @@ export async function octalToText(input: string): Promise<string> {
   return invoke<string>("octal_to_text", { input });
 }
 
+export async function encodeFile(inputPath: string, encoding: string): Promise<string> {
+  return invoke<string>("encode_file", { inputPath, encoding });
+}
+
+export async function decodeFile(inputPath: string, outputPath: string, encoding: string): Promise<string> {
+  return invoke<string>("decode_file", { inputPath, outputPath, encoding });
+}
+
+export async function decodeTextToFile(input: string, outputPath: string, encoding: string): Promise<string> {
+  return invoke<string>("decode_text_to_file", { input, outputPath, encoding });
+}
+
 // ── Hasher ─────────────────────────────────────────────────────
 export async function hashText(input: string, algorithm: string): Promise<string> {
   return invoke<string>("hash_text", { input, algorithm });

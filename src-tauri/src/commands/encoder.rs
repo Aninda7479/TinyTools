@@ -311,6 +311,90 @@ pub fn octal_to_text(input: String) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|e| format!("Invalid UTF-8: {}", e))
 }
 
+// ── File Encode / Decode ────────────────────────────────────────
+
+#[tauri::command]
+pub fn encode_file(input_path: String, encoding: String) -> Result<String, String> {
+    let data = std::fs::read(&input_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    match encoding.as_str() {
+        "base64" => Ok(general_purpose::STANDARD.encode(&data)),
+        "base64url" => Ok(general_purpose::URL_SAFE_NO_PAD.encode(&data)),
+        "base32" => Ok(BASE32.encode(&data)),
+        "base58" => Ok(bs58::encode(&data).into_string()),
+        "hex" => Ok(hex::encode(&data)),
+        "binary" => {
+            let out: String = data.iter().map(|b| format!("{:08b}", b)).collect::<Vec<_>>().join(" ");
+            Ok(out)
+        }
+        "octal" => {
+            let out: String = data.iter().map(|b| format!("{:03o}", b)).collect::<Vec<_>>().join(" ");
+            Ok(out)
+        }
+        _ => Err(format!("Unsupported encoding: {}", encoding)),
+    }
+}
+
+#[tauri::command]
+pub fn decode_file(input_path: String, output_path: String, encoding: String) -> Result<String, String> {
+    let text = std::fs::read_to_string(&input_path).map_err(|e| format!("Failed to read input file: {}", e))?;
+    let data = decode_to_bytes(&text, &encoding)?;
+    let parent = std::path::Path::new(&output_path).parent().map(|p| p.to_path_buf());
+    if let Some(dir) = parent {
+        std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+    }
+    std::fs::write(&output_path, &data).map_err(|e| format!("Failed to write output file: {}", e))?;
+    Ok(output_path)
+}
+
+fn decode_to_bytes(text: &str, encoding: &str) -> Result<Vec<u8>, String> {
+    match encoding {
+        "base64" => general_purpose::STANDARD.decode(text.trim()).map_err(|e| format!("Base64 decode error: {}", e)),
+        "base64url" => general_purpose::URL_SAFE_NO_PAD.decode(text.trim()).map_err(|e| format!("Base64URL decode error: {}", e)),
+        "base32" => {
+            let normalized = text.trim().to_uppercase();
+            BASE32_NOPAD.decode(normalized.as_bytes())
+                .or_else(|_| BASE32.decode(normalized.as_bytes()))
+                .map_err(|e| format!("Base32 decode error: {}", e))
+        }
+        "base58" => bs58::decode(text.trim()).into_vec().map_err(|e| format!("Base58 decode error: {}", e)),
+        "hex" => {
+            let normalized = text.trim().trim_start_matches("0x");
+            hex::decode(normalized).map_err(|e| format!("Hex decode error: {}", e))
+        }
+        "binary" => {
+            let tokens: Vec<&str> = text.split(|c: char| c.is_whitespace()).filter(|t| !t.is_empty()).collect();
+            let mut bytes = Vec::new();
+            for token in &tokens {
+                if token.len() != 8 || !token.chars().all(|c| c == '0' || c == '1') {
+                    return Err(format!("Invalid 8-bit binary segment: '{}'", token));
+                }
+                bytes.push(u8::from_str_radix(token, 2).map_err(|e| e.to_string())?);
+            }
+            Ok(bytes)
+        }
+        "octal" => {
+            let tokens: Vec<&str> = text.split(|c: char| c.is_whitespace()).filter(|t| !t.is_empty()).collect();
+            let mut bytes = Vec::new();
+            for token in &tokens {
+                bytes.push(u8::from_str_radix(token, 8).map_err(|e| format!("Invalid octal: {}", e))?);
+            }
+            Ok(bytes)
+        }
+        _ => Err(format!("Unsupported encoding: {}", encoding)),
+    }
+}
+
+#[tauri::command]
+pub fn decode_text_to_file(input: String, output_path: String, encoding: String) -> Result<String, String> {
+    let data = decode_to_bytes(&input, &encoding)?;
+    let parent = std::path::Path::new(&output_path).parent().map(|p| p.to_path_buf());
+    if let Some(dir) = parent {
+        std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+    }
+    std::fs::write(&output_path, &data).map_err(|e| format!("Failed to write output file: {}", e))?;
+    Ok(output_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
