@@ -46,6 +46,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
   const [verifyExpected, setVerifyExpected] = useState("");
   const [verifyResult, setVerifyResult] = useState<api.VerifyResult | null>(null);
   const [verifyTextInput, setVerifyTextInput] = useState("");
+  const [multiTextInput, setMultiTextInput] = useState("");
 
   const handleHashText = async () => {
     if (!textInput.trim()) return;
@@ -68,10 +69,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
     setMultiResult(null);
     setVerifyResult(null);
     try {
-      if (active === "multi-hash") {
-        const result = await api.hashFileAll(filePath);
-        setMultiResult(result);
-      } else if (active === "verify") {
+      if (active === "verify") {
         if (!verifyExpected.trim()) { setError("Enter expected hash"); setLoading(false); return; }
         const result = await api.verifyFileHash(filePath, algorithm, verifyExpected);
         setVerifyResult(result);
@@ -83,6 +81,44 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
       setError(e?.toString() || "File hash failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMultiHashText = async () => {
+    if (!multiTextInput.trim()) return;
+    setLoading(true);
+    setError("");
+    setMultiResult(null);
+    try {
+      const result = await api.hashTextAll(multiTextInput);
+      setMultiResult(result);
+    } catch (e: any) {
+      setError(e?.toString() || "Multi-hash failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMultiHashFile = async () => {
+    if (!filePath) return;
+    setLoading(true);
+    setError("");
+    setMultiResult(null);
+    try {
+      const result = await api.hashFileAll(filePath);
+      setMultiResult(result);
+    } catch (e: any) {
+      setError(e?.toString() || "Multi-hash failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMultiHash = async () => {
+    if (filePath) {
+      await handleMultiHashFile();
+    } else {
+      await handleMultiHashText();
     }
   };
 
@@ -137,16 +173,18 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const isFileBased = active !== "text-hash" && active !== "verify";
+  const isFileBased = active !== "text-hash" && active !== "verify" && active !== "multi-hash";
 
   const canSubmit = () => {
     if (active === "verify") return (filePath || verifyTextInput.trim()) && verifyExpected.trim();
+    if (active === "multi-hash") return filePath || multiTextInput.trim();
     if (isFileBased) return !!filePath;
     return !!textInput.trim();
   };
 
   const handleSubmit = () => {
     if (active === "verify") { handleVerify(); return; }
+    if (active === "multi-hash") { handleMultiHash(); return; }
     if (isFileBased) { handleHashFile(); return; }
     handleHashText();
   };
@@ -192,6 +230,13 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
           {active === "text-hash" && (
             <textarea value={textInput} onChange={(e) => setTextInput(e.target.value)}
               placeholder="Enter text to hash..."
+              className="h-32 resize-none rounded-xl bg-white/5 border border-border p-3 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors font-mono"
+            />
+          )}
+
+          {active === "multi-hash" && (
+            <textarea value={multiTextInput} onChange={(e) => setMultiTextInput(e.target.value)}
+              placeholder="Enter text (or pick a file below)..."
               className="h-32 resize-none rounded-xl bg-white/5 border border-border p-3 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors font-mono"
             />
           )}
@@ -259,7 +304,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
 
             {multiResult && (
               <div className="space-y-3">
-                <span className="text-[10px] text-white/30 uppercase tracking-wider">All Hashes — {fileName}</span>
+                <span className="text-[10px] text-white/30 uppercase tracking-wider">All Hashes — {fileName || `${multiResult.file_size} bytes`}</span>
                 <div className="space-y-2">
                   {(["md5", "sha1", "sha256", "sha512", "blake3", "crc32"] as const).map((algo) => (
                     <div key={algo} className="flex items-start gap-2 group">
@@ -273,7 +318,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
                   ))}
                 </div>
                 <div className="text-[10px] text-white/20 pt-2 border-t border-white/5">
-                  File size: {(multiResult.file_size / 1024).toFixed(1)} KB
+                  {fileName ? `File size: ${(multiResult.file_size / 1024).toFixed(1)} KB` : `Input size: ${multiResult.file_size} bytes`}
                 </div>
               </div>
             )}
@@ -302,7 +347,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
             {!textHash && !multiResult && !verifyResult && (
               <div className="flex flex-col items-center justify-center h-full text-white/20">
                 <FileText className="w-10 h-10 mb-3" />
-                <p className="text-sm">{isFileBased ? "Select a file to compute hashes" : active === "verify" ? "Select a file or enter text to verify" : "Enter text and compute its hash"}</p>
+                <p className="text-sm">{isFileBased ? "Select a file" : active === "verify" ? "Select a file or enter text to verify" : active === "multi-hash" ? "Enter text or pick a file" : "Enter text and compute its hash"}</p>
               </div>
             )}
           </div>

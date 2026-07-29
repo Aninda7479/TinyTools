@@ -206,6 +206,44 @@ pub fn hash_file_all(input_path: String) -> Result<MultiHashResult, String> {
     })
 }
 
+#[tauri::command]
+pub fn hash_text_all(input: String) -> Result<MultiHashResult, String> {
+    let data = input.as_bytes();
+
+    let md5_h = {
+        let mut h = Md5::new();
+        h.update(data);
+        format!("{:x}", h.finalize())
+    };
+    let sha1_h = {
+        let mut h = sha1::Sha1::new();
+        h.update(data);
+        format!("{:x}", h.finalize())
+    };
+    let sha256_h = {
+        let mut h = Sha256::new();
+        h.update(data);
+        format!("{:x}", h.finalize())
+    };
+    let sha512_h = {
+        let mut h = Sha512::new();
+        h.update(data);
+        format!("{:x}", h.finalize())
+    };
+    let blake3_h = blake3::hash(data).to_hex().to_string();
+    let crc32_h = format!("{:08x}", crc32fast::hash(data));
+
+    Ok(MultiHashResult {
+        md5: md5_h,
+        sha1: sha1_h,
+        sha256: sha256_h,
+        sha512: sha512_h,
+        blake3: blake3_h,
+        crc32: crc32_h,
+        file_size: data.len() as u64,
+    })
+}
+
 // ── Verify ─────────────────────────────────────────────────────
 
 #[derive(Serialize, Deserialize)]
@@ -314,6 +352,16 @@ mod tests {
         drop(f);
 
         let result = hash_file_all(path.to_str().unwrap().to_string()).unwrap();
+        assert_eq!(result.md5, "2b8ca86a0770830e1ffeb0774a75978f");
+        assert_eq!(result.sha256.len(), 64);
+        assert_eq!(result.sha512.len(), 128);
+        assert_eq!(result.blake3.len(), 64);
+        assert_eq!(result.file_size, 9);
+    }
+
+    #[test]
+    fn test_hash_text_all() {
+        let result = hash_text_all("tinytools".to_string()).unwrap();
         assert_eq!(result.md5, "2b8ca86a0770830e1ffeb0774a75978f");
         assert_eq!(result.sha256.len(), 64);
         assert_eq!(result.sha512.len(), 128);

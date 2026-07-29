@@ -332,6 +332,9 @@ export interface MultiHashResult {
 export async function hashFileAll(inputPath: string): Promise<MultiHashResult> {
   return invoke<MultiHashResult>("hash_file_all", { inputPath });
 }
+export async function hashTextAll(input: string): Promise<MultiHashResult> {
+  return invoke<MultiHashResult>("hash_text_all", { input });
+}
 
 export interface VerifyResult {
   matches: boolean;
