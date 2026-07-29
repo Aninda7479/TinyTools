@@ -341,6 +341,9 @@ export interface VerifyResult {
 export async function verifyFileHash(inputPath: string, algorithm: string, expectedHash: string): Promise<VerifyResult> {
   return invoke<VerifyResult>("verify_file_hash", { inputPath, algorithm, expectedHash });
 }
+export async function verifyTextHash(input: string, algorithm: string, expectedHash: string): Promise<VerifyResult> {
+  return invoke<VerifyResult>("verify_text_hash", { input, algorithm, expectedHash });
+}
 
 // ── Encryption ─────────────────────────────────────────────────
 export async function encryptTextAes(input: string, passphrase: string, kdf: string = "argon2"): Promise<string> {

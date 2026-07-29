@@ -232,6 +232,23 @@ pub fn verify_file_hash(
     })
 }
 
+#[tauri::command]
+pub fn verify_text_hash(
+    input: String,
+    algorithm: String,
+    expected_hash: String,
+) -> Result<VerifyResult, String> {
+    let hash = compute_hash(&algorithm, input.as_bytes())?;
+    let computed = hash.to_lowercase();
+    let expected = expected_hash.trim().to_lowercase();
+
+    Ok(VerifyResult {
+        matches: computed == expected,
+        computed,
+        expected,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

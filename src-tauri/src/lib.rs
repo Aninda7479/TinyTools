@@ -90,6 +90,7 @@ pub fn run() {
             commands::hasher::hash_file,
             commands::hasher::hash_file_all,
             commands::hasher::verify_file_hash,
+            commands::hasher::verify_text_hash,
             // Encryption
             commands::encryption::encrypt_text_aes,
             commands::encryption::decrypt_text_aes,

@@ -45,6 +45,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
   // Verify state
   const [verifyExpected, setVerifyExpected] = useState("");
   const [verifyResult, setVerifyResult] = useState<api.VerifyResult | null>(null);
+  const [verifyTextInput, setVerifyTextInput] = useState("");
 
   const handleHashText = async () => {
     if (!textInput.trim()) return;
@@ -85,6 +86,29 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
     }
   };
 
+  const handleVerifyText = async () => {
+    if (!verifyTextInput.trim() || !verifyExpected.trim()) return;
+    setLoading(true);
+    setError("");
+    setVerifyResult(null);
+    try {
+      const result = await api.verifyTextHash(verifyTextInput, algorithm, verifyExpected);
+      setVerifyResult(result);
+    } catch (e: any) {
+      setError(e?.toString() || "Verify failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (filePath) {
+      await handleHashFile();
+    } else {
+      await handleVerifyText();
+    }
+  };
+
   const openPicker = useCallback(async () => {
     const picked = await pickFile();
     if (!picked) return;
@@ -101,7 +125,26 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const isFileBased = active !== "text-hash";
+  const isFileBased = active !== "text-hash" && active !== "verify";
+
+  const canSubmit = () => {
+    if (active === "verify") return (filePath || verifyTextInput.trim()) && verifyExpected.trim();
+    if (isFileBased) return !!filePath;
+    return !!textInput.trim();
+  };
+
+  const handleSubmit = () => {
+    if (active === "verify") { handleVerify(); return; }
+    if (isFileBased) { handleHashFile(); return; }
+    handleHashText();
+  };
+
+  const buttonLabel = () => {
+    if (loading) return active === "verify" ? "Verifying..." : "Hashing...";
+    if (active === "multi-hash") return "Compute All";
+    if (active === "verify") return "Verify";
+    return "Compute Hash";
+  };
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -142,16 +185,22 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
           )}
 
           {active === "verify" && (
-            <input type="text" value={verifyExpected} onChange={(e) => setVerifyExpected(e.target.value)}
-              placeholder="Enter expected hash to compare..."
-              className="rounded-xl bg-white/5 border border-border px-3 py-2 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors font-mono"
-            />
+            <>
+              <textarea value={verifyTextInput} onChange={(e) => setVerifyTextInput(e.target.value)}
+                placeholder="Or enter text to verify..."
+                className="h-28 resize-none rounded-xl bg-white/5 border border-border p-3 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors font-mono"
+              />
+              <input type="text" value={verifyExpected} onChange={(e) => setVerifyExpected(e.target.value)}
+                placeholder="Enter expected hash to compare..."
+                className="rounded-xl bg-white/5 border border-border px-3 py-2 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors font-mono"
+              />
+            </>
           )}
 
-          <button onClick={isFileBased ? handleHashFile : handleHashText}
-            disabled={loading || (isFileBased ? !filePath : !textInput.trim())}
+          <button onClick={handleSubmit}
+            disabled={loading || !canSubmit()}
             className="w-full py-2.5 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors disabled:opacity-40 text-sm font-medium"
-          >{loading ? "Hashing..." : active === "multi-hash" ? "Compute All" : active === "verify" ? "Verify" : "Compute Hash"}</button>
+          >{buttonLabel()}</button>
         </div>
 
         <div className="flex-1 flex flex-col gap-3 min-h-0">
@@ -241,7 +290,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
             {!textHash && !multiResult && !verifyResult && (
               <div className="flex flex-col items-center justify-center h-full text-white/20">
                 <FileText className="w-10 h-10 mb-3" />
-                <p className="text-sm">{isFileBased ? "Select a file to compute hashes" : "Enter text and compute its hash"}</p>
+                <p className="text-sm">{isFileBased ? "Select a file to compute hashes" : active === "verify" ? "Select a file or enter text to verify" : "Enter text and compute its hash"}</p>
               </div>
             )}
           </div>
