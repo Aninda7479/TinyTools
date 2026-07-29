@@ -1,11 +1,12 @@
 use axum::body::Body;
-use axum::extract::{Query, State};
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -14,14 +15,26 @@ pub struct ServerState {
     pub transfers: Arc<Mutex<HashMap<String, PortalTransfer>>>,
     pub downloads_dir: Arc<Mutex<String>>,
     pub receiving_transfers: Arc<Mutex<HashMap<String, ReceivingTransfer>>>,
+    pub download_limits: Arc<Mutex<HashMap<String, DownloadLimit>>>,
+}
+
+#[derive(Clone)]
+pub struct DownloadLimit {
+    pub window_started: std::time::Instant,
+    pub attempts: u8,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PortalTransfer {
+    #[serde(skip_serializing, skip_deserializing)]
     pub file_path: String,
     pub file_name: String,
     pub file_size: u64,
-    pub password: Option<String>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub encrypted_data: Option<Vec<u8>>,
+    pub encryption_salt: Option<String>,
+    pub encryption_nonce: Option<String>,
+    pub encryption_iterations: Option<u32>,
     pub started_at: u64,
 }
 
@@ -39,6 +52,7 @@ pub struct ReceivingTransfer {
 
 #[derive(Deserialize)]
 pub struct PortalQuery {
+    #[allow(dead_code)]
     pub password: Option<String>,
 }
 
@@ -119,10 +133,19 @@ h1{{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}}
 </div>
 <script>
 let fileInfo={{}};
+let failedPasswordAttempts=0, passwordBlockedUntil=0;
 async function init(){{
-try{{const r=await fetch("/api/info");if(!r.ok)throw new Error("No file available");fileInfo=await r.json();document.getElementById("loadingIndicator").style.display="none";document.getElementById("fileName").textContent=fileInfo.file_name;document.getElementById("fileSize").textContent=formatSize(fileInfo.file_size);if(fileInfo.password){{document.getElementById("passwordSection").style.display="block";document.getElementById("encryptedBadge").style.display="inline-flex"}}else{{document.getElementById("encryptedBadge").style.display="none"}}}}catch(e){{document.getElementById("loadingIndicator").textContent=e.message;document.getElementById("fileName").textContent="No file available";document.getElementById("downloadBtn").disabled=true}}}}
+try{{const r=await fetch("/api/info");if(!r.ok)throw new Error("No file available");fileInfo=await r.json();document.getElementById("loadingIndicator").style.display="none";document.getElementById("fileName").textContent=fileInfo.file_name;document.getElementById("fileSize").textContent=formatSize(fileInfo.file_size);if(fileInfo.encryption_salt){{document.getElementById("passwordSection").style.display="block";document.getElementById("encryptedBadge").style.display="inline-flex"}}else{{document.getElementById("encryptedBadge").style.display="none"}}}}catch(e){{document.getElementById("loadingIndicator").textContent=e.message;document.getElementById("fileName").textContent="No file available";document.getElementById("downloadBtn").disabled=true}}}}
 function formatSize(b){{if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(2)+" GB"}}
-async function startDownload(){{const btn=document.getElementById("downloadBtn");btn.disabled=true;btn.textContent="Downloading...";document.getElementById("progressSection").style.display="block";document.getElementById("errorText").style.display="none";document.getElementById("successText").style.display="none";try{{const pwd=document.getElementById("passwordInput")?.value||"";const url=fileInfo.password?"/api/download?password="+encodeURIComponent(pwd):"/api/download";const resp=await fetch(url);if(!resp.ok){{const err=await resp.json().catch(()=>({{error:"Download failed"}}));throw new Error(err.error||resp.statusText||"Download failed")}}const ct=resp.headers.get("content-length")||"0";const total=parseInt(ct);const reader=resp.body.getReader();const chunks=[];let received=0;while(true){{const{{done,value}}=await reader.read();if(done)break;chunks.push(value);received+=value.length;if(total>0){{const pct=Math.round(received/total*100);document.getElementById("progressFill").style.width=pct+"%";document.getElementById("progressText").textContent=received>1024*1024?formatSize(received)+" / "+formatSize(total)+" ("+pct+"%)":pct+"%"}}}}const blob=new Blob(chunks);const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fileInfo.file_name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);document.getElementById("successText").style.display="block";btn.textContent="Downloaded"}}catch(e){{document.getElementById("errorText").textContent=e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry Download"}}}}
+function base64Bytes(value){{const raw=atob(value);return Uint8Array.from(raw,c=>c.charCodeAt(0));}}
+async function decryptLocally(ciphertext,password){{if(!window.isSecureContext||!window.crypto?.subtle)throw new Error("This browser requires a secure HTTPS connection for local decryption. The portal must be opened over HTTPS.");const keyMaterial=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"]);const key=await crypto.subtle.deriveKey({{name:"PBKDF2",salt:base64Bytes(fileInfo.encryption_salt),iterations:fileInfo.encryption_iterations,hash:"SHA-256"}},keyMaterial,{{name:"AES-GCM",length:256}},false,["decrypt"]);return crypto.subtle.decrypt({{name:"AES-GCM",iv:base64Bytes(fileInfo.encryption_nonce)}},key,ciphertext);}}
+async function startDownload(){{const btn=document.getElementById("downloadBtn");if(Date.now()<passwordBlockedUntil){{const error=document.getElementById("errorText");error.textContent="Too many incorrect passwords. Try again in "+Math.ceil((passwordBlockedUntil-Date.now())/1000)+" seconds.";error.style.display="block";return}}btn.disabled=true;btn.textContent="Downloading...";document.getElementById("progressSection").style.display="block";document.getElementById("errorText").style.display="none";document.getElementById("successText").style.display="none";try{{const resp=await fetch("/api/download");if(!resp.ok){{const err=await resp.json().catch(()=>({{error:"Download failed"}}));throw new Error(err.error||resp.statusText||"Download failed")}}const ct=resp.headers.get("content-length")||"0";const total=parseInt(ct);const reader=resp.body.getReader();const chunks=[];let received=0;while(true){{const{{done,value}}=await reader.read();if(done)break;chunks.push(value);received+=value.length;if(total>0){{const pct=Math.round(received/total*100);document.getElementById("progressFill").style.width=pct+"%";document.getElementById("progressText").textContent=received>1024*1024?formatSize(received)+" / "+formatSize(total)+" ("+pct+"%)":pct+"%"}}}}let blob=new Blob(chunks);if(fileInfo.encryption_salt){{try{{const password=document.getElementById("passwordInput").value;if(!password)throw new Error("Enter the password to decrypt this file.");const plaintext=await decryptLocally(await blob.arrayBuffer(),password);blob=new Blob([plaintext])}}catch(e){{failedPasswordAttempts++;if(failedPasswordAttempts>=5){{passwordBlockedUntil=Date.now()+30000;failedPasswordAttempts=0;throw new Error("Too many incorrect passwords. Try again in 30 seconds.")}}throw new Error("Incorrect password ("+(5-failedPasswordAttempts)+" attempts remaining).")}}}}const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fileInfo.file_name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);document.getElementById("successText").style.display="block";btn.textContent="Downloaded"}}catch(e){{document.getElementById("errorText").textContent=e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry Download"}}}}
+if(!window.isSecureContext||!window.crypto?.subtle){{
+  const error=document.getElementById("errorText");
+  error.textContent="Local password decryption requires an HTTPS connection. This HTTP portal cannot decrypt securely in this browser.";
+  error.style.display="block";
+  document.getElementById("downloadBtn").disabled=true;
+}}
 init();
 </script>
 </body></html>"#,
@@ -143,7 +166,7 @@ async fn get_portal_info(
 
 async fn download_file(
     State(state): State<ServerState>,
-    Query(query): Query<PortalQuery>,
+    ConnectInfo(remote_addr): ConnectInfo<SocketAddr>,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let transfers = state.transfers.lock().await;
     let transfer = transfers.values().next().ok_or_else(|| {
@@ -153,22 +176,39 @@ async fn download_file(
         )
     })?;
 
-    if let Some(ref expected_pwd) = transfer.password {
-        match &query.password {
-            Some(pwd) if pwd == expected_pwd => {}
-            _ => {
-                return Err((
-                    StatusCode::UNAUTHORIZED,
-                    Json(serde_json::json!({"error": "Invalid password"})),
-                ));
-            }
-        }
-    }
-
     let file_path = transfer.file_path.clone();
     let file_size = transfer.file_size;
     let file_name = transfer.file_name.clone();
+    let encrypted_data = transfer.encrypted_data.clone();
     drop(transfers);
+
+    // Limits repeated downloads from a single device. Password validation is
+    // intentionally local to the browser, so the password never reaches this server.
+    let mut limits = state.download_limits.lock().await;
+    let entry = limits.entry(remote_addr.ip().to_string()).or_insert(DownloadLimit {
+        window_started: std::time::Instant::now(),
+        attempts: 0,
+    });
+    if entry.window_started.elapsed() >= std::time::Duration::from_secs(60) {
+        entry.window_started = std::time::Instant::now();
+        entry.attempts = 0;
+    }
+    if entry.attempts >= 10 {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({"error": "Too many download attempts. Try again in a minute."})),
+        ));
+    }
+    entry.attempts += 1;
+    drop(limits);
+
+    if let Some(data) = encrypted_data {
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", "application/octet-stream".parse().unwrap());
+        headers.insert("content-length", data.len().to_string().parse().unwrap());
+        headers.insert("x-tinytools-encrypted", "true".parse().unwrap());
+        return Ok((headers, Body::from(data)).into_response());
+    }
 
     let file = tokio::fs::File::open(&file_path)
         .await
@@ -299,7 +339,7 @@ pub async fn start_server(
         .with_state(state);
 
     let handle = tokio::spawn(async move {
-        let _ = axum::serve(listener, app).await;
+        let _ = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await;
     });
 
     Ok((port, handle))

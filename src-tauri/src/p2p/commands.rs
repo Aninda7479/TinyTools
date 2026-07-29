@@ -1,4 +1,5 @@
 use super::*;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use crate::p2p::{encryption, mdns, server, P2PState, TransferState, TransferInfo, PeerListResult, SendResult, PortalResult, get_state, now_secs};
 
 #[tauri::command]
@@ -246,6 +247,20 @@ pub fn start_web_portal(
         .to_string();
     let file_size = file_meta.len();
 
+    let (encrypted_data, encryption_salt, encryption_nonce, encryption_iterations) =
+        if let Some(ref portal_password) = password {
+            let file_data = std::fs::read(&file_path).map_err(|e| e.to_string())?;
+            let encrypted = encryption::encrypt_for_web_portal(portal_password, &file_data)?;
+            (
+                Some(encrypted.ciphertext),
+                Some(STANDARD.encode(encrypted.salt)),
+                Some(STANDARD.encode(encrypted.nonce)),
+                Some(encryption::PORTAL_PBKDF2_ITERATIONS),
+            )
+        } else {
+            (None, None, None, None)
+        };
+
     let local_ip = mdns::get_local_ip().to_string();
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
@@ -259,7 +274,10 @@ pub fn start_web_portal(
                     file_path: file_path.clone(),
                     file_name: file_name.clone(),
                     file_size,
-                    password: password.clone(),
+                    encrypted_data,
+                    encryption_salt,
+                    encryption_nonce,
+                    encryption_iterations,
                     started_at: now_secs(),
                 },
             );
@@ -273,6 +291,7 @@ pub fn start_web_portal(
                 .to_string(),
         )),
         receiving_transfers: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        download_limits: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
     let (port, handle) = rt.block_on(server::start_server(state))?;

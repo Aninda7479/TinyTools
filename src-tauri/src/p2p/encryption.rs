@@ -6,10 +6,39 @@ use hmac::{Hmac, Mac};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::Sha256;
+use pbkdf2::pbkdf2_hmac;
 
 type HmacSha256 = Hmac<Sha256>;
 
 pub const CHUNK_SIZE: usize = 256 * 1024;
+/// Kept in sync with the Web Crypto implementation in the portal page.
+pub const PORTAL_PBKDF2_ITERATIONS: u32 = 310_000;
+
+pub struct PortalEncryption {
+    pub ciphertext: Vec<u8>,
+    pub salt: Vec<u8>,
+    pub nonce: Vec<u8>,
+}
+
+/// Encrypts the portal payload before it leaves the sharing device. The
+/// receiving browser derives the same key and decrypts it locally.
+pub fn encrypt_for_web_portal(password: &str, plaintext: &[u8]) -> Result<PortalEncryption, String> {
+    let salt = generate_salt();
+    let mut key = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, PORTAL_PBKDF2_ITERATIONS, &mut key);
+
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let ciphertext = cipher
+        .encrypt(&nonce, plaintext)
+        .map_err(|e| format!("Portal encryption failed: {}", e))?;
+
+    Ok(PortalEncryption {
+        ciphertext,
+        salt,
+        nonce: nonce.to_vec(),
+    })
+}
 
 pub fn generate_salt() -> Vec<u8> {
     let mut salt = vec![0u8; 16];
