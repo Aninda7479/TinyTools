@@ -36,9 +36,10 @@ pub fn decrypt_for_web_portal(
     ciphertext: &[u8],
     salt: &[u8],
     nonce: &[u8],
+    iterations: u32,
 ) -> Result<Vec<u8>, String> {
     let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PORTAL_PBKDF2_ITERATIONS, &mut key);
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, iterations, &mut key);
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
     let nonce = Nonce::from_slice(nonce);
     cipher

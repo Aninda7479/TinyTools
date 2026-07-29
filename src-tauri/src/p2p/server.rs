@@ -11,8 +11,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use crate::p2p::{get_incoming_transfers, now_secs, IncomingTransfer};
+use crate::p2p::{encryption, get_incoming_transfers, now_secs, IncomingTransfer};
 use std::path::PathBuf;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -202,8 +203,10 @@ function formatSize(b){if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFix
 // Phase 1: announce metadata only — no data leaves the browser
 function startUpload(){if(!selectedFile)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Announcing...";document.getElementById("errorText").style.display="none";document.getElementById("statusText").style.display="none";document.getElementById("progressSection").style.display="block";document.getElementById("progressFill").style.width="0%";document.getElementById("progressText").textContent="Sending file info...";const password=document.getElementById("passwordInput")?.value||"";const xhr=new XMLHttpRequest();xhr.open("POST","/api/announce",true);xhr.setRequestHeader("X-TinyTools-Filename",encodeURIComponent(selectedFile.name));xhr.setRequestHeader("X-TinyTools-FileSize",selectedFile.size.toString());if(password)xhr.setRequestHeader("X-TinyTools-Password",password);xhr.onload=function(){if(xhr.status>=200&&xhr.status<300){try{const data=JSON.parse(xhr.responseText);transferId=data.transfer_id;document.getElementById("progressText").textContent="Waiting for device to accept...";document.getElementById("statusText").textContent="File info sent! Waiting for download confirmation...";document.getElementById("statusText").style.display="block";document.getElementById("statusText").style.color="rgba(255,255,255,.5)";pollTimer=setInterval(pollStatus,2000)}catch(e){document.getElementById("errorText").textContent="Invalid response";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Send"}}else{let msg="Failed to send file info";try{const err=JSON.parse(xhr.responseText);msg=err.error||msg}catch(e){}document.getElementById("errorText").textContent=msg;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Send";document.getElementById("progressSection").style.display="none"}};xhr.onerror=function(){document.getElementById("errorText").textContent="Network error";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Send";document.getElementById("progressSection").style.display="none"};xhr.send()}
 
+async function encryptLocally(plaintext,password){const salt=crypto.getRandomValues(new Uint8Array(16));const nonce=crypto.getRandomValues(new Uint8Array(12));const iterations=310000;const keyMaterial=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"]);const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations,hash:"SHA-256"},keyMaterial,{name:"AES-GCM",length:256},false,["encrypt"]);const ciphertext=await crypto.subtle.encrypt({name:"AES-GCM",iv:nonce},key,plaintext);return{ciphertext,saltBase64:btoa(String.fromCharCode(...salt)),nonceBase64:btoa(String.fromCharCode(...nonce)),iterations}}
+
 // Phase 2: when device accepts, upload the actual file data
-function uploadData(){if(!selectedFile||!transferId)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Uploading...";document.getElementById("progressFill").style.width="0%";document.getElementById("progressText").textContent="0%";const xhr=new XMLHttpRequest();xhr.open("POST","/api/upload-data/"+transferId,true);xhr.setRequestHeader("Content-Type","application/octet-stream");xhr.upload.onprogress=function(e){if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);document.getElementById("progressFill").style.width=pct+"%";document.getElementById("progressText").textContent=pct+"% ("+formatSize(e.loaded)+" / "+formatSize(e.total)+")"}};xhr.onload=function(){if(xhr.status>=200&&xhr.status<300){document.getElementById("progressFill").style.width="100%";document.getElementById("progressText").textContent="File delivered!";document.getElementById("statusText").textContent="File delivered!";document.getElementById("statusText").style.color="#4ade80";btn.textContent="Done";btn.disabled=false}else{let msg="Upload failed";try{const err=JSON.parse(xhr.responseText);msg=err.error||msg}catch(e){}document.getElementById("errorText").textContent=msg;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"}};xhr.onerror=function(){document.getElementById("errorText").textContent="Network error";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"};xhr.send(selectedFile)}
+async function uploadData(){if(!selectedFile||!transferId)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Encrypting...";document.getElementById("progressFill").style.width="0%";document.getElementById("progressText").textContent="0%";try{const password=document.getElementById("passwordInput")?.value||"";let uploadBody;let saltHeader="",nonceHeader="",iterHeader="";if(password){const buffer=await selectedFile.arrayBuffer();const enc=await encryptLocally(buffer,password);uploadBody=new Blob([enc.ciphertext]);saltHeader=enc.saltBase64;nonceHeader=enc.nonceBase64;iterHeader=enc.iterations.toString()}else{uploadBody=selectedFile}btn.textContent="Uploading...";const xhr=new XMLHttpRequest();xhr.open("POST","/api/upload-data/"+transferId,true);xhr.setRequestHeader("Content-Type","application/octet-stream");if(password){xhr.setRequestHeader("X-TinyTools-Salt",saltHeader);xhr.setRequestHeader("X-TinyTools-Nonce",nonceHeader);xhr.setRequestHeader("X-TinyTools-Iterations",iterHeader)}xhr.upload.onprogress=function(e){if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);document.getElementById("progressFill").style.width=pct+"%";document.getElementById("progressText").textContent=pct+"% ("+formatSize(e.loaded)+" / "+formatSize(e.total)+")"}};xhr.onload=function(){if(xhr.status>=200&&xhr.status<300){document.getElementById("progressFill").style.width="100%";document.getElementById("progressText").textContent="File delivered!";document.getElementById("statusText").textContent="File delivered!";document.getElementById("statusText").style.color="#4ade80";btn.textContent="Done";btn.disabled=false}else{let msg="Upload failed";try{const err=JSON.parse(xhr.responseText);msg=err.error||msg}catch(e){}document.getElementById("errorText").textContent=msg;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"}};xhr.onerror=function(){document.getElementById("errorText").textContent="Network error";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"};xhr.send(uploadBody)}catch(e){document.getElementById("errorText").textContent="Encryption error: "+e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"}}
 
 async function pollStatus(){if(!transferId)return;try{const resp=await fetch("/api/upload-status/"+transferId);if(!resp.ok){if(resp.status===404){document.getElementById("errorText").textContent="Transfer not found on server (may have been cleared)";document.getElementById("errorText").style.display="block"}return}const data=await resp.json();if(data.status==="ready"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Device accepted! Uploading file...";document.getElementById("statusText").style.color="#60a5fa";uploadData()}else if(data.status==="rejected"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer was rejected";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}else if(data.status==="not_found"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer expired or cancelled";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}}catch(e){document.getElementById("errorText").textContent="Poll error: "+e.message;document.getElementById("errorText").style.display="block"}}
 document.addEventListener("dragover",function(e){e.preventDefault();document.getElementById("uploadZone").classList.add("dragover")});
@@ -374,7 +377,9 @@ async fn handle_announce(
 // ── API: Upload data (only after user accepts download) ───────────────
 
 async fn handle_upload_data(
+    State(state): State<ServerState>,
     Path(transfer_id): Path<String>,
+    headers: HeaderMap,
     body: Body,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     let save_path = {
@@ -404,28 +409,91 @@ async fn handle_upload_data(
         }
     }
 
-    // Stream directly to the chosen save path
-    let mut file = tokio::fs::File::create(&save_path_buf).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
-    })?;
-    let mut stream = body.into_data_stream();
-    let mut received: u64 = 0;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| {
+    // Check if the upload is encrypted (browser sends encryption headers when password is set)
+    let salt_header = headers.get("X-TinyTools-Salt").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let nonce_header = headers.get("X-TinyTools-Nonce").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let iterations_header = headers.get("X-TinyTools-Iterations").and_then(|v| v.to_str().ok()).and_then(|s| s.parse::<u32>().ok());
+
+    let is_encrypted = salt_header.is_some();
+
+    // If receive_password is set but upload is not encrypted, reject
+    if state.receive_password.is_some() && !is_encrypted {
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Encrypted upload required when receive password is set"}))));
+    }
+
+    if is_encrypted {
+        // Buffered path: collect all bytes, decrypt, then write
+        let password = state.receive_password.as_ref().ok_or_else(|| {
+            (StatusCode::PRECONDITION_FAILED, Json(serde_json::json!({"error": "No receive password set for decryption"})))
+        })?;
+        let salt_b64 = salt_header.unwrap();
+        let nonce_b64 = nonce_header.ok_or_else(|| {
+            (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Missing X-TinyTools-Nonce header"})))
+        })?;
+        let iterations = iterations_header.unwrap_or(encryption::PORTAL_PBKDF2_ITERATIONS);
+
+        let salt = STANDARD.decode(&salt_b64)
+            .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": format!("Invalid salt encoding: {}", e)}))))?;
+        let nonce = STANDARD.decode(&nonce_b64)
+            .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": format!("Invalid nonce encoding: {}", e)}))))?;
+
+        let mut ciphertext = Vec::new();
+        let mut stream = body.into_data_stream();
+        let mut received: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            })?;
+            ciphertext.extend_from_slice(&chunk);
+            received += chunk.len() as u64;
+
+            let mut transfers = get_incoming_transfers().lock().map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            })?;
+            if let Some(t) = transfers.get_mut(&transfer_id) {
+                t.received_bytes = received;
+            }
+        }
+
+        let plaintext = encryption::decrypt_for_web_portal(password, &ciphertext, &salt, &nonce, iterations)
+            .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": format!("Decryption failed: {}", e)}))))?;
+
+        tokio::fs::write(&save_path_buf, &plaintext).await.map_err(|e| {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
         })?;
-        file.write_all(&chunk).await.map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
-        })?;
-        received += chunk.len() as u64;
 
         let mut transfers = get_incoming_transfers().lock().map_err(|e| {
             (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
         })?;
         if let Some(t) = transfers.get_mut(&transfer_id) {
-            t.received_bytes = received;
             if received >= t.file_size {
                 t.status = "accepted".to_string();
+            }
+        }
+    } else {
+        // Stream directly to the chosen save path (plaintext)
+        let mut file = tokio::fs::File::create(&save_path_buf).await.map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        let mut stream = body.into_data_stream();
+        let mut received: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            })?;
+            file.write_all(&chunk).await.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            })?;
+            received += chunk.len() as u64;
+
+            let mut transfers = get_incoming_transfers().lock().map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+            })?;
+            if let Some(t) = transfers.get_mut(&transfer_id) {
+                t.received_bytes = received;
+                if received >= t.file_size {
+                    t.status = "accepted".to_string();
+                }
             }
         }
     }
