@@ -261,7 +261,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
         </div>
 
         <div className="flex-1 flex flex-col gap-3 min-h-0">
-          {isFileBased && (
+          {(isFileBased || active === "multi-hash") && (
             <motion.div
               animate={{
                 borderColor: "rgba(255,255,255,0.1)",
