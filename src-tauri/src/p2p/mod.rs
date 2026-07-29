@@ -20,7 +20,11 @@ pub struct IncomingTransfer {
     pub file_name: String,
     pub file_size: u64,
     pub sender_ip: String,
-    pub data: Vec<u8>,
+    /// Temp path used during streaming from browser (old approach)
+    pub temp_path: Option<String>,
+    /// Final save path chosen by user — set when download is accepted
+    pub save_path: Option<String>,
+    pub received_bytes: u64,
     pub encrypted: bool,
     pub encryption_salt: Option<Vec<u8>>,
     pub encryption_nonce: Option<Vec<u8>>,
@@ -33,6 +37,7 @@ pub struct IncomingTransferInfo {
     pub id: String,
     pub file_name: String,
     pub file_size: u64,
+    pub received_bytes: u64,
     pub sender_ip: String,
     pub encrypted: bool,
     pub status: String,

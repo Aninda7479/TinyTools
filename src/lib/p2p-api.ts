@@ -11,6 +11,7 @@ export interface IncomingTransferInfo {
   id: string;
   file_name: string;
   file_size: number;
+  received_bytes: number;
   sender_ip: string;
   encrypted: boolean;
   status: string;
@@ -37,16 +38,12 @@ export async function getPendingTransfers(): Promise<IncomingTransferInfo[]> {
   return invoke<IncomingTransferInfo[]>("get_pending_transfers");
 }
 
-export async function acceptTransfer(transferId: string): Promise<string> {
-  return invoke<string>("accept_transfer", { transferId });
+export async function acceptTransfer(transferId: string, savePath: string): Promise<void> {
+  return invoke<void>("accept_transfer", { transferId, savePath });
 }
 
 export async function rejectTransfer(transferId: string): Promise<void> {
   return invoke<void>("reject_transfer", { transferId });
-}
-
-export async function saveTransferAs(transferId: string, outputPath: string): Promise<void> {
-  return invoke<void>("save_transfer_as", { transferId, outputPath });
 }
 
 export async function cleanupP2P(): Promise<void> {

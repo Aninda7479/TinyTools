@@ -111,7 +111,6 @@ pub fn run() {
             p2p::commands::get_pending_transfers,
             p2p::commands::accept_transfer,
             p2p::commands::reject_transfer,
-            p2p::commands::save_transfer_as,
             p2p::commands::cleanup,
             // Video Tools
             commands::video_tools::get_video_info,

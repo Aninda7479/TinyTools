@@ -17,12 +17,6 @@ export default function P2PReceivePage() {
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
-    return () => {
-      p2p.cleanupP2P().catch(() => {});
-    };
-  }, []);
-
-  useEffect(() => {
     if (!portal) {
       setFileList([]);
       return;
@@ -69,8 +63,8 @@ export default function P2PReceivePage() {
     if (!dest) return;
     setSaving(id);
     try {
-      await p2p.saveTransferAs(id, dest);
-      setFileList((prev) => prev.filter((t) => t.id !== id));
+      await p2p.acceptTransfer(id, dest);
+      // File stays visible; poller will show progress when status becomes "receiving"
     } catch (e: any) {
       setError(e?.toString() || "Failed to save file");
     } finally {
@@ -86,9 +80,9 @@ export default function P2PReceivePage() {
     setSaving("all");
     try {
       for (const file of fileList) {
-        await p2p.saveTransferAs(file.id, dir + sep + file.file_name);
+        await p2p.acceptTransfer(file.id, dir + sep + file.file_name);
       }
-      setFileList([]);
+      // Files stay visible until each transfer completes
     } catch (e: any) {
       setError(e?.toString() || "Failed to save files");
     } finally {
@@ -192,33 +186,60 @@ export default function P2PReceivePage() {
                         </motion.button>
                       )}
                     </div>
-                    {fileList.map((t) => (
+                    {fileList
+                      .filter((t) => t.status !== "accepted")
+                      .map((t) => {
+                      const isDownloading = t.status === "ready" || t.status === "receiving";
+                      const pct = t.file_size > 0 ? Math.round((t.received_bytes / t.file_size) * 100) : 0;
+                      return (
                       <motion.div
                         key={t.id}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -5 }}
-                        className="px-3 py-2.5 rounded-xl bg-white/5 border border-border flex items-center gap-3"
+                        className="px-3 py-2.5 rounded-xl bg-white/5 border border-border flex flex-col gap-2"
                       >
-                        <Download className="w-4 h-4 text-blue-400 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-white/80 truncate">{t.file_name}</p>
-                          <p className="text-[10px] text-white/30">
-                            {formatSize(t.file_size)} &middot; {t.sender_ip}
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <Download className="w-4 h-4 text-blue-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-white/80 truncate">{t.file_name}</p>
+                            <p className="text-[10px] text-white/30">
+                              {formatSize(t.file_size)} &middot; {t.sender_ip}
+                            </p>
+                          </div>
+                          {t.status === "announced" ? (
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleDownload(t.id)}
+                              disabled={saving === t.id}
+                              className="px-2.5 py-1.5 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30 text-[11px] hover:bg-green-500/30 transition-colors disabled:opacity-40 flex items-center gap-1 shrink-0"
+                            >
+                              <FileDown className="w-3 h-3" />
+                              {saving === t.id ? "Saving..." : "Download"}
+                            </motion.button>
+                          ) : (
+                            <span className="text-[11px] text-blue-400/70 shrink-0">
+                              {t.status === "ready" ? "Waiting..." : `${pct}%`}
+                            </span>
+                          )}
                         </div>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleDownload(t.id)}
-                          disabled={saving === t.id}
-                          className="px-2.5 py-1.5 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30 text-[11px] hover:bg-green-500/30 transition-colors disabled:opacity-40 flex items-center gap-1 shrink-0"
-                        >
-                          <FileDown className="w-3 h-3" />
-                          {saving === t.id ? "Saving..." : "Download"}
-                        </motion.button>
+                        {isDownloading && t.status === "receiving" && (
+                          <div className="space-y-0.5">
+                            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-green-400 transition-all duration-300"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <p className="text-[9px] text-white/30 text-right">
+                              {formatSize(t.received_bytes)} / {formatSize(t.file_size)}
+                            </p>
+                          </div>
+                        )}
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </motion.div>
                 )}
               </AnimatePresence>

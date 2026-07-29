@@ -4,12 +4,15 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use tokio_stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use crate::p2p::{get_incoming_transfers, now_secs, IncomingTransfer};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -193,10 +196,16 @@ h1{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}
 <script>
 let selectedFile=null, transferId=null, pollTimer=null;
 async function init(){try{const r=await fetch("/api/info");if(!r.ok)throw new Error();const data=await r.json();if(data.receive_password_required){document.getElementById("passwordSection").style.display="block"}else{document.getElementById("passwordSection").style.display="none"}}catch(e){document.getElementById("passwordSection").style.display="none"}}
-function onFileSelect(){const input=document.getElementById("fileInput");if(input.files.length>0){selectedFile=input.files[0];document.getElementById("selectedFile").textContent=selectedFile.name+" ("+formatSize(selectedFile.size)+")";document.getElementById("selectedFile").style.display="block";document.getElementById("uploadText").textContent="File selected";document.getElementById("uploadBtn").disabled=false;document.getElementById("uploadBtn").textContent="Upload File"}}
+function onFileSelect(){const input=document.getElementById("fileInput");if(input.files.length>0){selectedFile=input.files[0];document.getElementById("selectedFile").textContent=selectedFile.name+" ("+formatSize(selectedFile.size)+")";document.getElementById("selectedFile").style.display="block";document.getElementById("uploadText").textContent="File selected";document.getElementById("uploadBtn").disabled=false;document.getElementById("uploadBtn").textContent="Send"}}
 function formatSize(b){if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(2)+" GB"}
-async function startUpload(){if(!selectedFile)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Uploading...";document.getElementById("errorText").style.display="none";document.getElementById("statusText").style.display="none";document.getElementById("progressSection").style.display="block";try{const password=document.getElementById("passwordInput")?.value||"";const headers=new Headers({"Content-Type":"application/octet-stream","X-TinyTools-Filename":encodeURIComponent(selectedFile.name)});if(password)headers.set("X-TinyTools-Password",password);const resp=await fetch("/api/upload",{method:"POST",headers,body:selectedFile,duplex:"half"});if(!resp.ok){const err=await resp.json().catch(()=>({error:"Upload failed"}));throw new Error(err.error||"Upload failed")}const data=await resp.json();transferId=data.transfer_id;document.getElementById("progressFill").style.width="100%";document.getElementById("progressText").textContent="Upload complete - waiting for recipient to accept...";document.getElementById("statusText").textContent="File sent! Waiting for acceptance...";document.getElementById("statusText").style.display="block";document.getElementById("statusText").style.color="rgba(255,255,255,.5)";pollTimer=setInterval(pollStatus,2000)}catch(e){document.getElementById("errorText").textContent=e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Upload File";document.getElementById("progressSection").style.display="none"}}
-async function pollStatus(){if(!transferId)return;try{const resp=await fetch("/api/upload-status/"+transferId);if(!resp.ok){clearInterval(pollTimer);return}const data=await resp.json();if(data.status==="accepted"){clearInterval(pollTimer);document.getElementById("statusText").textContent="File accepted and delivered!";document.getElementById("statusText").style.color="#4ade80";document.getElementById("uploadBtn").textContent="Done";document.getElementById("uploadBtn").disabled=false}else if(data.status==="rejected"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer was rejected";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}else if(data.status==="expired"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer expired";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}}catch(e){}}
+
+// Phase 1: announce metadata only — no data leaves the browser
+function startUpload(){if(!selectedFile)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Announcing...";document.getElementById("errorText").style.display="none";document.getElementById("statusText").style.display="none";document.getElementById("progressSection").style.display="block";document.getElementById("progressFill").style.width="0%";document.getElementById("progressText").textContent="Sending file info...";const password=document.getElementById("passwordInput")?.value||"";const xhr=new XMLHttpRequest();xhr.open("POST","/api/announce",true);xhr.setRequestHeader("X-TinyTools-Filename",encodeURIComponent(selectedFile.name));xhr.setRequestHeader("X-TinyTools-FileSize",selectedFile.size.toString());if(password)xhr.setRequestHeader("X-TinyTools-Password",password);xhr.onload=function(){if(xhr.status>=200&&xhr.status<300){try{const data=JSON.parse(xhr.responseText);transferId=data.transfer_id;document.getElementById("progressText").textContent="Waiting for device to accept...";document.getElementById("statusText").textContent="File info sent! Waiting for download confirmation...";document.getElementById("statusText").style.display="block";document.getElementById("statusText").style.color="rgba(255,255,255,.5)";pollTimer=setInterval(pollStatus,2000)}catch(e){document.getElementById("errorText").textContent="Invalid response";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Send"}}else{let msg="Failed to send file info";try{const err=JSON.parse(xhr.responseText);msg=err.error||msg}catch(e){}document.getElementById("errorText").textContent=msg;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Send";document.getElementById("progressSection").style.display="none"}};xhr.onerror=function(){document.getElementById("errorText").textContent="Network error";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Send";document.getElementById("progressSection").style.display="none"};xhr.send()}
+
+// Phase 2: when device accepts, upload the actual file data
+function uploadData(){if(!selectedFile||!transferId)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Uploading...";document.getElementById("progressFill").style.width="0%";document.getElementById("progressText").textContent="0%";const xhr=new XMLHttpRequest();xhr.open("POST","/api/upload-data/"+transferId,true);xhr.setRequestHeader("Content-Type","application/octet-stream");xhr.upload.onprogress=function(e){if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);document.getElementById("progressFill").style.width=pct+"%";document.getElementById("progressText").textContent=pct+"% ("+formatSize(e.loaded)+" / "+formatSize(e.total)+")"}};xhr.onload=function(){if(xhr.status>=200&&xhr.status<300){document.getElementById("progressFill").style.width="100%";document.getElementById("progressText").textContent="File delivered!";document.getElementById("statusText").textContent="File delivered!";document.getElementById("statusText").style.color="#4ade80";btn.textContent="Done";btn.disabled=false}else{let msg="Upload failed";try{const err=JSON.parse(xhr.responseText);msg=err.error||msg}catch(e){}document.getElementById("errorText").textContent=msg;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"}};xhr.onerror=function(){document.getElementById("errorText").textContent="Network error";document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry"};xhr.send(selectedFile)}
+
+async function pollStatus(){if(!transferId)return;try{const resp=await fetch("/api/upload-status/"+transferId);if(!resp.ok){if(resp.status===404){document.getElementById("errorText").textContent="Transfer not found on server (may have been cleared)";document.getElementById("errorText").style.display="block"}return}const data=await resp.json();if(data.status==="ready"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Device accepted! Uploading file...";document.getElementById("statusText").style.color="#60a5fa";uploadData()}else if(data.status==="rejected"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer was rejected";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}else if(data.status==="not_found"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer expired or cancelled";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}}catch(e){document.getElementById("errorText").textContent="Poll error: "+e.message;document.getElementById("errorText").style.display="block"}}
 document.addEventListener("dragover",function(e){e.preventDefault();document.getElementById("uploadZone").classList.add("dragover")});
 document.addEventListener("dragleave",function(e){e.preventDefault();document.getElementById("uploadZone").classList.remove("dragover")});
 document.addEventListener("drop",function(e){e.preventDefault();document.getElementById("uploadZone").classList.remove("dragover");const files=e.dataTransfer.files;if(files.length>0){const input=document.getElementById("fileInput");const dt=new DataTransfer();dt.items.add(files[0]);input.files=dt.files;onFileSelect()}});
@@ -294,33 +303,30 @@ async fn download_file(
     Ok((headers, body).into_response())
 }
 
-// ── API: Upload file (new) ──────────────────────────────────────────────
+// ── API: Announce file (metadata only ─ no data touches device) ──────
 
 #[derive(Serialize)]
-struct UploadResponse {
+struct AnnounceResponse {
     transfer_id: String,
 }
 
-async fn handle_upload(
+async fn handle_announce(
     State(state): State<ServerState>,
     headers: HeaderMap,
     ConnectInfo(remote_addr): ConnectInfo<SocketAddr>,
-    body: axum::body::Bytes,
-) -> Result<Json<UploadResponse>, (StatusCode, Json<serde_json::Value>)> {
-    if body.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "Empty request body"})),
-        ));
-    }
-
+) -> Result<Json<AnnounceResponse>, (StatusCode, Json<serde_json::Value>)> {
     let filename = headers
         .get("X-TinyTools-Filename")
         .and_then(|v| v.to_str().ok())
         .map(|v| urlencoding::decode(v).unwrap_or_default().to_string())
         .unwrap_or_else(|| "unnamed".to_string());
 
-    // Validate receive password if required
+    let file_size: u64 = headers
+        .get("X-TinyTools-FileSize")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+
     if let Some(ref expected_pwd) = state.receive_password {
         let provided = headers
             .get("X-TinyTools-Password")
@@ -336,18 +342,19 @@ async fn handle_upload(
 
     let transfer_id = uuid_simple();
     let sender_ip = remote_addr.ip().to_string();
-    let file_size = body.len() as u64;
 
     let incoming = IncomingTransfer {
         id: transfer_id.clone(),
         file_name: filename,
         file_size,
         sender_ip,
-        data: body.to_vec(),
+        temp_path: None,
+        save_path: None,
+        received_bytes: 0,
         encrypted: false,
         encryption_salt: None,
         encryption_nonce: None,
-        status: "pending".to_string(),
+        status: "announced".to_string(),
         created_at: now_secs(),
     };
 
@@ -361,14 +368,112 @@ async fn handle_upload(
         transfers.insert(transfer_id.clone(), incoming);
     }
 
-    Ok(Json(UploadResponse { transfer_id }))
+    Ok(Json(AnnounceResponse { transfer_id }))
 }
 
-// ── API: Upload status poll (new) ───────────────────────────────────────
+// ── API: Upload data (only after user accepts download) ───────────────
+
+async fn handle_upload_data(
+    Path(transfer_id): Path<String>,
+    body: Body,
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
+    let save_path = {
+        let transfers = get_incoming_transfers().lock().map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        let t = transfers.get(&transfer_id).ok_or_else(|| {
+            (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Transfer not found"})))
+        })?;
+        if t.status != "ready" {
+            return Err((StatusCode::PRECONDITION_FAILED, Json(serde_json::json!({"error": "Transfer not ready"}))));
+        }
+        t.save_path.clone().ok_or_else(|| {
+            (StatusCode::PRECONDITION_FAILED, Json(serde_json::json!({"error": "No save path set"})))
+        })?
+    };
+
+    let save_path_buf = PathBuf::from(&save_path);
+
+    // Set status to "receiving" so Tauri UI can show progress
+    {
+        let mut transfers = get_incoming_transfers().lock().map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        if let Some(t) = transfers.get_mut(&transfer_id) {
+            t.status = "receiving".to_string();
+        }
+    }
+
+    // Stream directly to the chosen save path
+    let mut file = tokio::fs::File::create(&save_path_buf).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+    })?;
+    let mut stream = body.into_data_stream();
+    let mut received: u64 = 0;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        file.write_all(&chunk).await.map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        received += chunk.len() as u64;
+
+        let mut transfers = get_incoming_transfers().lock().map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        if let Some(t) = transfers.get_mut(&transfer_id) {
+            t.received_bytes = received;
+            if received >= t.file_size {
+                t.status = "accepted".to_string();
+            }
+        }
+    }
+
+    Ok(StatusCode::OK.into_response())
+}
+
+// ── API: Download a received transfer (stream from temp file) ────────
+
+async fn download_transfer(
+    Path(transfer_id): Path<String>,
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
+    let (temp_path, file_name) = {
+        let transfers = get_incoming_transfers().lock().map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+        })?;
+        let t = transfers.get(&transfer_id).ok_or_else(|| {
+            (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Transfer not found"})))
+        })?;
+        let fp = t.temp_path.clone().ok_or_else(|| {
+            (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "File not available"})))
+        })?;
+        (fp, t.file_name.clone())
+    };
+
+    let file = tokio::fs::File::open(&temp_path).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+    })?;
+    let meta = file.metadata().await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()})))
+    })?;
+    let stream = tokio_util::io::ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    let mut headers = HeaderMap::new();
+    headers.insert("content-type", "application/octet-stream".parse().unwrap());
+    headers.insert("content-disposition", format!("attachment; filename=\"{}\"", file_name).parse().unwrap());
+    headers.insert("content-length", meta.len().to_string().parse().unwrap());
+    Ok((headers, body).into_response())
+}
+
+// ── API: Upload status poll ───────────────────────────────────────────
 
 #[derive(Serialize)]
 struct UploadStatusResponse {
     status: String,
+    received_bytes: u64,
+    file_size: u64,
 }
 
 async fn upload_status(
@@ -381,18 +486,12 @@ async fn upload_status(
         )
     })?;
 
-    let status = transfers
+    let (status, received_bytes, file_size) = transfers
         .get(&transfer_id)
-        .map(|t| {
-            if t.status == "pending" && now_secs() - t.created_at > 120 {
-                "expired".to_string()
-            } else {
-                t.status.clone()
-            }
-        })
-        .unwrap_or_else(|| "not_found".to_string());
+        .map(|t| (t.status.clone(), t.received_bytes, t.file_size))
+        .unwrap_or_else(|| ("not_found".to_string(), 0, 0));
 
-    Ok(Json(UploadStatusResponse { status }))
+    Ok(Json(UploadStatusResponse { status, received_bytes, file_size }))
 }
 
 // ── Server setup ────────────────────────────────────────────────────────
@@ -422,8 +521,10 @@ pub async fn start_server(
         .route("/receive", get(receive_page))
         .route("/api/info", get(get_portal_info))
         .route("/api/download", get(download_file))
-        .route("/api/upload", post(handle_upload))
-        .route("/api/upload-status/{id}", get(upload_status))
+        .route("/api/announce", post(handle_announce))
+        .route("/api/upload-data/:id", post(handle_upload_data))
+        .route("/api/upload-status/:id", get(upload_status))
+        .route("/api/download-transfer/:id", get(download_transfer))
         .with_state(state);
 
     let handle = tokio::spawn(async move {

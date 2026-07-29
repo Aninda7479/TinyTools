@@ -114,6 +114,10 @@ pub fn stop_web_portal() -> Result<(), String> {
         state.server_port = None;
         state.server_runtime = None;
     }
+    // Clear stale incoming transfers
+    if let Ok(mut transfers) = get_incoming_transfers().lock() {
+        transfers.clear();
+    }
     Ok(())
 }
 
@@ -122,11 +126,12 @@ pub fn get_pending_transfers() -> Result<Vec<IncomingTransferInfo>, String> {
     let transfers = get_incoming_transfers().lock().map_err(|e| e.to_string())?;
     Ok(transfers
         .values()
-        .filter(|t| t.status == "pending")
+        .filter(|t| t.status == "announced" || t.status == "ready" || t.status == "receiving")
         .map(|t| IncomingTransferInfo {
             id: t.id.clone(),
             file_name: t.file_name.clone(),
             file_size: t.file_size,
+            received_bytes: t.received_bytes,
             sender_ip: t.sender_ip.clone(),
             encrypted: t.encrypted,
             status: t.status.clone(),
@@ -136,50 +141,22 @@ pub fn get_pending_transfers() -> Result<Vec<IncomingTransferInfo>, String> {
 }
 
 #[tauri::command]
-pub fn accept_transfer(transfer_id: String) -> Result<String, String> {
+pub fn accept_transfer(transfer_id: String, save_path: String) -> Result<(), String> {
     let mut transfers = get_incoming_transfers().lock().map_err(|e| e.to_string())?;
     let transfer = transfers.get_mut(&transfer_id).ok_or("Transfer not found")?;
-    if transfer.status != "pending" {
+    if transfer.status != "announced" {
         return Err("Transfer already processed".to_string());
     }
 
-    let downloads = dirs_next::download_dir()
-        .or_else(|| dirs_next::home_dir())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-
-    let save_path = downloads.join(&transfer.file_name);
-    std::fs::write(&save_path, &transfer.data).map_err(|e| e.to_string())?;
-    transfer.status = "accepted".to_string();
-
-    Ok(save_path.to_string_lossy().to_string())
+    transfer.save_path = Some(save_path);
+    transfer.status = "ready".to_string();
+    Ok(())
 }
 
 #[tauri::command]
 pub fn reject_transfer(transfer_id: String) -> Result<(), String> {
     let mut transfers = get_incoming_transfers().lock().map_err(|e| e.to_string())?;
     transfers.remove(&transfer_id);
-    Ok(())
-}
-
-#[tauri::command]
-pub fn save_transfer_as(transfer_id: String, output_path: String) -> Result<(), String> {
-    let transfers = get_incoming_transfers().lock().map_err(|e| e.to_string())?;
-    let transfer = transfers.get(&transfer_id).ok_or("Transfer not found")?;
-    if transfer.status != "pending" {
-        return Err("Transfer already processed".to_string());
-    }
-    let data = transfer.data.clone();
-    let status = transfer.status.clone();
-    drop(transfers);
-
-    std::fs::write(&output_path, &data).map_err(|e| e.to_string())?;
-
-    let mut transfers = get_incoming_transfers().lock().map_err(|e| e.to_string())?;
-    if let Some(t) = transfers.get_mut(&transfer_id) {
-        if t.status == status {
-            t.status = "accepted".to_string();
-        }
-    }
     Ok(())
 }
 
