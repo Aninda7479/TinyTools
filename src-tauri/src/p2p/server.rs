@@ -325,11 +325,23 @@ async fn receive_transfer(
 
 pub async fn start_server(
     state: ServerState,
+    local_ip: &str,
 ) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:0")
-        .await
+    let listener = std::net::TcpListener::bind("0.0.0.0:0")
         .map_err(|e| format!("Failed to bind server: {}", e))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+
+    let certified_key = rcgen::generate_simple_self_signed(vec![
+        "localhost".to_string(),
+        local_ip.to_string(),
+    ])
+    .map_err(|e| format!("Failed to generate portal certificate: {}", e))?;
+    let tls_config = axum_server::tls_rustls::RustlsConfig::from_pem(
+        certified_key.cert.pem().into_bytes(),
+        certified_key.key_pair.serialize_pem().into_bytes(),
+    )
+    .await
+    .map_err(|e| format!("Failed to configure HTTPS: {}", e))?;
 
     let app = Router::new()
         .route("/", get(portal_page))
@@ -339,7 +351,9 @@ pub async fn start_server(
         .with_state(state);
 
     let handle = tokio::spawn(async move {
-        let _ = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await;
+        let _ = axum_server::from_tcp_rustls(listener, tls_config)
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+            .await;
     });
 
     Ok((port, handle))

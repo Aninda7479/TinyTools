@@ -294,7 +294,7 @@ pub fn start_web_portal(
         download_limits: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
-    let (port, handle) = rt.block_on(server::start_server(state))?;
+    let (port, handle) = rt.block_on(server::start_server(state, &local_ip))?;
 
     {
         let mut guard = get_state().lock().map_err(|e| e.to_string())?;
@@ -318,7 +318,7 @@ pub fn start_web_portal(
         p2p.server_runtime = Some(rt);
     }
 
-    let url = format!("http://{}:{}", local_ip, port);
+    let url = format!("https://{}:{}", local_ip, port);
 
     let qr_code_base64 = generate_qr_code_png(&url)?;
 

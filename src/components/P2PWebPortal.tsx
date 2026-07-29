@@ -64,8 +64,8 @@ export default function P2PWebPortal({
         </div>
 
         <p className="text-[10px] text-white/30 text-center mb-3">
-          Scan the QR code with any device on the same Wi-Fi network to download the file.
-          No app installation required.
+          Scan the QR code with any device on the same Wi-Fi network. On first use,
+          accept the local HTTPS certificate warning, then enter the password to decrypt locally.
         </p>
 
         <motion.button
