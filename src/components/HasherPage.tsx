@@ -182,7 +182,7 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
           )}
 
           <div className="flex-1 overflow-auto rounded-xl bg-white/5 border border-border p-4">
-            {active === "text-hash" && textHash && (
+            {(active === "text-hash" || active === "file-hash") && textHash && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white/30 uppercase tracking-wider">{algorithm.toUpperCase()} Hash</span>
@@ -191,7 +191,8 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
                   </button>
                 </div>
                 <p className="text-sm text-green-400 font-mono break-all leading-relaxed">{textHash}</p>
-                <p className="text-[10px] text-white/20">{textInput.length} characters input</p>
+                {active === "text-hash" && <p className="text-[10px] text-white/20">{textInput.length} characters input</p>}
+                {active === "file-hash" && <p className="text-[10px] text-white/20">{fileName}</p>}
               </div>
             )}
 
