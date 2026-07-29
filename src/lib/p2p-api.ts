@@ -5,6 +5,7 @@ export interface PortalResult {
   receive_url: string;
   qr_code_base64: string;
   port: number;
+  upnp_success: boolean;
 }
 
 export interface IncomingTransferInfo {

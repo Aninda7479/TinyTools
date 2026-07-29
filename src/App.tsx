@@ -18,6 +18,8 @@ import HasherPage from "./components/HasherPage";
 import EncryptionPage from "./components/EncryptionPage";
 import P2PSendPage from "./components/P2PSendPage";
 import P2PReceivePage from "./components/P2PReceivePage";
+import GlobalSharePage from "./components/GlobalSharePage";
+import GlobalReceivePage from "./components/GlobalReceivePage";
 import VideoToolsPage from "./components/VideoToolsPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -58,6 +60,8 @@ function AppInner() {
       case "encryption": return <EncryptionPage key="encryption" defaultSub={activeSub} />;
       case "portal-send": return <P2PSendPage key="portal-send" />;
       case "portal-receive": return <P2PReceivePage key="portal-receive" />;
+      case "global-share": return <GlobalSharePage key="global-share" />;
+      case "global-receive": return <GlobalReceivePage key="global-receive" />;
       case "video": return <VideoToolsPage key="video" defaultSub={activeSub} />;
       default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }

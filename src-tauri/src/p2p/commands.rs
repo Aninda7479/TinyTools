@@ -72,6 +72,29 @@ pub fn start_web_portal(
 
     let (port, handle) = rt.block_on(server::start_server(state, &local_ip))?;
 
+    // Attempt UPnP port forwarding on a best-effort basis
+    let upnp_success = rt.block_on(async {
+        match igd_next::aio::tokio::search_gateway(Default::default()).await {
+            Ok(gateway) => {
+                let local_addr = format!("{}:{}", local_ip, port);
+                match gateway
+                    .add_port(
+                        igd_next::PortMappingProtocol::TCP,
+                        port,
+                        local_addr.parse().unwrap(),
+                        3600,
+                        "TinyTools Global Share",
+                    )
+                    .await
+                {
+                    Ok(()) => true,
+                    Err(_) => false,
+                }
+            }
+            Err(_) => false,
+        }
+    });
+
     {
         let mut guard = get_state().lock().map_err(|e| e.to_string())?;
         let p2p = guard.get_or_insert_with(|| P2PState {
@@ -101,6 +124,7 @@ pub fn start_web_portal(
         receive_url,
         qr_code_base64,
         port,
+        upnp_success,
     })
 }
 

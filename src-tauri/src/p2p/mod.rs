@@ -51,6 +51,7 @@ pub struct PortalResult {
     pub receive_url: String,
     pub qr_code_base64: String,
     pub port: u16,
+    pub upnp_success: bool,
 }
 
 fn get_state() -> &'static Mutex<Option<P2PState>> {
