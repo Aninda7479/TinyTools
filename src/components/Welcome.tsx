@@ -7,7 +7,7 @@ import {
   Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
   Gauge, Zap, SplitSquareHorizontal, Combine, ChevronRight, Palette,
   ShieldCheck, FileLock, Film, Merge, VolumeX, Volume2,
-  Image as ImageIcon, Subtitles,
+  Image as ImageIcon, Subtitles, Download,
 } from "lucide-react";
 import type { Tool } from "./Sidebar";
 
@@ -151,7 +151,8 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
     label: "Share",
     icon: Radio,
     features: [
-      { icon: QrCode, title: "Local Web Portal", tag: "Network", tool: "p2p", keywords: "local web portal qr code download browser" },
+      { icon: QrCode, title: "Local Web Portal Send", tag: "Network", tool: "portal-send", keywords: "local web portal send share file qr code download browser" },
+      { icon: Download, title: "Local Web Portal Receive", tag: "Network", tool: "portal-receive", keywords: "local web portal receive upload incoming file accept" },
     ],
   },
 ];

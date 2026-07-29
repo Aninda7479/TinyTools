@@ -1,5 +1,5 @@
 use aes_gcm::aead::{Aead, AeadCore};
-use aes_gcm::{Aes256Gcm, KeyInit};
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use pbkdf2::pbkdf2_hmac;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -29,6 +29,21 @@ pub fn encrypt_for_web_portal(password: &str, plaintext: &[u8]) -> Result<Portal
         salt,
         nonce: nonce.to_vec(),
     })
+}
+
+pub fn decrypt_for_web_portal(
+    password: &str,
+    ciphertext: &[u8],
+    salt: &[u8],
+    nonce: &[u8],
+) -> Result<Vec<u8>, String> {
+    let mut key = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PORTAL_PBKDF2_ITERATIONS, &mut key);
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let nonce = Nonce::from_slice(nonce);
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Portal decryption failed: {}", e))
 }
 
 pub fn generate_salt() -> Vec<u8> {

@@ -16,7 +16,8 @@ import PasswordGeneratorPage from "./components/PasswordGeneratorPage";
 import EncoderDecoderPage from "./components/EncoderDecoderPage";
 import HasherPage from "./components/HasherPage";
 import EncryptionPage from "./components/EncryptionPage";
-import P2PPage from "./components/P2PPage";
+import P2PSendPage from "./components/P2PSendPage";
+import P2PReceivePage from "./components/P2PReceivePage";
 import VideoToolsPage from "./components/VideoToolsPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -55,7 +56,8 @@ function AppInner() {
       case "encoder": return <EncoderDecoderPage key="encoder" defaultSub={activeSub} />;
       case "hasher": return <HasherPage key="hasher" defaultSub={activeSub} />;
       case "encryption": return <EncryptionPage key="encryption" defaultSub={activeSub} />;
-      case "p2p": return <P2PPage key="p2p" />;
+      case "portal-send": return <P2PSendPage key="portal-send" />;
+      case "portal-receive": return <P2PReceivePage key="portal-receive" />;
       case "video": return <VideoToolsPage key="video" defaultSub={activeSub} />;
       default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }

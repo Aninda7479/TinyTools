@@ -1,5 +1,5 @@
 use axum::body::Body;
-use axum::extract::{ConnectInfo, State};
+use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
@@ -9,12 +9,15 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use crate::p2p::{get_incoming_transfers, now_secs, IncomingTransfer};
 
 #[derive(Clone)]
 pub struct ServerState {
     pub transfers: Arc<Mutex<HashMap<String, PortalTransfer>>>,
     pub downloads_dir: Arc<Mutex<String>>,
     pub download_limits: Arc<Mutex<HashMap<String, DownloadLimit>>>,
+    pub receive_password: Option<String>,
+    pub receive_only: bool,
 }
 
 #[derive(Clone)]
@@ -37,8 +40,18 @@ pub struct PortalTransfer {
     pub started_at: u64,
 }
 
+#[derive(Serialize)]
+struct PortalInfoResponse {
+    file: Option<PortalTransfer>,
+    receive_password_required: bool,
+}
 
-async fn portal_page() -> Html<String> {
+// ── Download page (existing) ────────────────────────────────────────────
+
+async fn portal_page(State(state): State<ServerState>) -> Html<String> {
+    if state.receive_only {
+        return Html(RECEIVE_HTML.to_string());
+    }
     Html(format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -101,7 +114,7 @@ h1{{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}}
 <script>
 let fileInfo={{}};
 let failedPasswordAttempts=0, passwordBlockedUntil=0;
-async function init(){{try{{const r=await fetch("/api/info");if(!r.ok)throw new Error("No file available");fileInfo=await r.json();document.getElementById("loadingIndicator").style.display="none";document.getElementById("fileName").textContent=fileInfo.file_name;document.getElementById("fileSize").textContent=formatSize(fileInfo.file_size);if(fileInfo.encryption_salt){{document.getElementById("passwordSection").style.display="block";document.getElementById("encryptedBadge").style.display="inline-flex"}}else{{document.getElementById("encryptedBadge").style.display="none"}}}}catch(e){{document.getElementById("loadingIndicator").textContent=e.message;document.getElementById("fileName").textContent="No file available";document.getElementById("downloadBtn").disabled=true}}}}
+async function init(){{try{{const r=await fetch("/api/info");if(!r.ok)throw new Error("No file available");const data=await r.json();fileInfo=data.file||data;document.getElementById("loadingIndicator").style.display="none";document.getElementById("fileName").textContent=fileInfo.file_name;document.getElementById("fileSize").textContent=formatSize(fileInfo.file_size);if(fileInfo.encryption_salt){{document.getElementById("passwordSection").style.display="block";document.getElementById("encryptedBadge").style.display="inline-flex"}}else{{document.getElementById("encryptedBadge").style.display="none"}}}}catch(e){{document.getElementById("loadingIndicator").textContent=e.message;document.getElementById("fileName").textContent="No file available";document.getElementById("downloadBtn").disabled=true}}}}
 function formatSize(b){{if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(2)+" GB"}}
 function base64Bytes(value){{const raw=atob(value);return Uint8Array.from(raw,c=>c.charCodeAt(0));}}
 async function decryptLocally(ciphertext,password){{if(!window.isSecureContext||!window.crypto?.subtle)throw new Error("This browser requires a secure HTTPS connection for local decryption. The portal must be opened over HTTPS.");const keyMaterial=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"]);const key=await crypto.subtle.deriveKey({{name:"PBKDF2",salt:base64Bytes(fileInfo.encryption_salt),iterations:fileInfo.encryption_iterations,hash:"SHA-256"}},keyMaterial,{{name:"AES-GCM",length:256}},false,["decrypt"]);return crypto.subtle.decrypt({{name:"AES-GCM",iv:base64Bytes(fileInfo.encryption_nonce)}},key,ciphertext);}}
@@ -118,17 +131,97 @@ init();
     ))
 }
 
+// ── Receive / Upload page (new) ─────────────────────────────────────────
+
+static RECEIVE_HTML: &str = r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinyTools - Send File</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.container{max-width:420px;width:100%;padding:2rem;text-align:center}
+h1{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}
+.subtitle{color:rgba(255,255,255,.4);font-size:.875rem;margin-bottom:2rem}
+.upload-zone{border:2px dashed rgba(255,255,255,.15);border-radius:1.25rem;padding:2rem 1.5rem;cursor:pointer;transition:border-color .2s;margin-bottom:1.5rem}
+.upload-zone:hover{border-color:rgba(96,165,250,.4)}
+.upload-zone.dragover{border-color:#60a5fa;background:rgba(96,165,250,.05)}
+.upload-zone svg{width:48px;height:48px;color:rgba(255,255,255,.15);margin-bottom:.75rem}
+.upload-zone p{font-size:.875rem;color:rgba(255,255,255,.5)}
+.upload-zone .selected{font-size:.8rem;color:#60a5fa;margin-top:.5rem;display:none}
+.password-section{margin-bottom:1.5rem;display:none}
+.password-section input{width:100%;padding:.75rem 1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#fff;font-size:.875rem;outline:none;transition:border-color .2s}
+.password-section input:focus{border-color:rgba(96,165,250,.5)}
+.password-section p{color:rgba(255,255,255,.3);font-size:.75rem;margin-top:.5rem}
+.btn{width:100%;padding:.75rem;border-radius:.75rem;border:none;font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s}
+.btn-upload{background:rgba(96,165,250,.2);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
+.btn-upload:hover{background:rgba(96,165,250,.3)}
+.btn-upload:disabled{opacity:.4;cursor:not-allowed}
+.progress{display:none;margin-top:1.5rem}
+.progress-bar{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:.5rem}
+.progress-fill{height:100%;background:#60a5fa;border-radius:3px;transition:width .3s;width:0}
+.progress-text{font-size:.75rem;color:rgba(255,255,255,.4)}
+.status{font-size:.8rem;margin-top:1rem;display:none}
+.error{color:#f87171;font-size:.8rem;margin-top:1rem;display:none}
+.success{color:#4ade80;font-size:.8rem;margin-top:1rem}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>TinyTools</h1>
+<p class="subtitle">Send a File</p>
+<div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+<p id="uploadText">Click or drop a file here</p>
+<p class="selected" id="selectedFile"></p>
+</div>
+<input type="file" id="fileInput" style="display:none" onchange="onFileSelect()">
+<div class="password-section" id="passwordSection">
+<input type="password" id="passwordInput" placeholder="Enter receive password">
+<p>This device requires a password to receive files</p>
+</div>
+<button class="btn btn-upload" id="uploadBtn" onclick="startUpload()" disabled>Select a file</button>
+<div class="progress" id="progressSection">
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+<div class="progress-text" id="progressText">0%</div>
+</div>
+<div class="status" id="statusText"></div>
+<div class="error" id="errorText"></div>
+</div>
+<script>
+let selectedFile=null, transferId=null, pollTimer=null;
+async function init(){try{const r=await fetch("/api/info");if(!r.ok)throw new Error();const data=await r.json();if(data.receive_password_required){document.getElementById("passwordSection").style.display="block"}else{document.getElementById("passwordSection").style.display="none"}}catch(e){document.getElementById("passwordSection").style.display="none"}}
+function onFileSelect(){const input=document.getElementById("fileInput");if(input.files.length>0){selectedFile=input.files[0];document.getElementById("selectedFile").textContent=selectedFile.name+" ("+formatSize(selectedFile.size)+")";document.getElementById("selectedFile").style.display="block";document.getElementById("uploadText").textContent="File selected";document.getElementById("uploadBtn").disabled=false;document.getElementById("uploadBtn").textContent="Upload File"}}
+function formatSize(b){if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(2)+" GB"}
+async function startUpload(){if(!selectedFile)return;const btn=document.getElementById("uploadBtn");btn.disabled=true;btn.textContent="Uploading...";document.getElementById("errorText").style.display="none";document.getElementById("statusText").style.display="none";document.getElementById("progressSection").style.display="block";try{const password=document.getElementById("passwordInput")?.value||"";const headers=new Headers({"Content-Type":"application/octet-stream","X-TinyTools-Filename":encodeURIComponent(selectedFile.name)});if(password)headers.set("X-TinyTools-Password",password);const resp=await fetch("/api/upload",{method:"POST",headers,body:selectedFile,duplex:"half"});if(!resp.ok){const err=await resp.json().catch(()=>({error:"Upload failed"}));throw new Error(err.error||"Upload failed")}const data=await resp.json();transferId=data.transfer_id;document.getElementById("progressFill").style.width="100%";document.getElementById("progressText").textContent="Upload complete - waiting for recipient to accept...";document.getElementById("statusText").textContent="File sent! Waiting for acceptance...";document.getElementById("statusText").style.display="block";document.getElementById("statusText").style.color="rgba(255,255,255,.5)";pollTimer=setInterval(pollStatus,2000)}catch(e){document.getElementById("errorText").textContent=e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Upload File";document.getElementById("progressSection").style.display="none"}}
+async function pollStatus(){if(!transferId)return;try{const resp=await fetch("/api/upload-status/"+transferId);if(!resp.ok){clearInterval(pollTimer);return}const data=await resp.json();if(data.status==="accepted"){clearInterval(pollTimer);document.getElementById("statusText").textContent="File accepted and delivered!";document.getElementById("statusText").style.color="#4ade80";document.getElementById("uploadBtn").textContent="Done";document.getElementById("uploadBtn").disabled=false}else if(data.status==="rejected"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer was rejected";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}else if(data.status==="expired"){clearInterval(pollTimer);document.getElementById("statusText").textContent="Transfer expired";document.getElementById("statusText").style.color="#f87171";document.getElementById("uploadBtn").textContent="Try again";document.getElementById("uploadBtn").disabled=false}}catch(e){}}
+document.addEventListener("dragover",function(e){e.preventDefault();document.getElementById("uploadZone").classList.add("dragover")});
+document.addEventListener("dragleave",function(e){e.preventDefault();document.getElementById("uploadZone").classList.remove("dragover")});
+document.addEventListener("drop",function(e){e.preventDefault();document.getElementById("uploadZone").classList.remove("dragover");const files=e.dataTransfer.files;if(files.length>0){const input=document.getElementById("fileInput");const dt=new DataTransfer();dt.items.add(files[0]);input.files=dt.files;onFileSelect()}});
+init();
+</script>
+</body></html>"##;
+
+async fn receive_page() -> Html<String> {
+    Html(RECEIVE_HTML.to_string())
+}
+
+// ── API: Combined portal info ───────────────────────────────────────────
+
 async fn get_portal_info(
     State(state): State<ServerState>,
-) -> Result<Json<PortalTransfer>, StatusCode> {
+) -> Json<PortalInfoResponse> {
     let transfers = state.transfers.lock().await;
-    transfers
-        .values()
-        .next()
-        .cloned()
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
+    let file = transfers.values().next().cloned();
+    Json(PortalInfoResponse {
+        file,
+        receive_password_required: state.receive_password.is_some(),
+    })
 }
+
+// ── API: Download file (existing) ──────────────────────────────────────
 
 async fn download_file(
     State(state): State<ServerState>,
@@ -187,15 +280,11 @@ async fn download_file(
     let mut headers = HeaderMap::new();
     headers.insert(
         "content-type",
-        "application/octet-stream"
-            .parse()
-            .unwrap(),
+        "application/octet-stream".parse().unwrap(),
     );
     headers.insert(
         "content-disposition",
-        format!("attachment; filename=\"{}\"", file_name)
-            .parse()
-            .unwrap(),
+        format!("attachment; filename=\"{}\"", file_name).parse().unwrap(),
     );
     headers.insert(
         "content-length",
@@ -204,6 +293,109 @@ async fn download_file(
 
     Ok((headers, body).into_response())
 }
+
+// ── API: Upload file (new) ──────────────────────────────────────────────
+
+#[derive(Serialize)]
+struct UploadResponse {
+    transfer_id: String,
+}
+
+async fn handle_upload(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    ConnectInfo(remote_addr): ConnectInfo<SocketAddr>,
+    body: axum::body::Bytes,
+) -> Result<Json<UploadResponse>, (StatusCode, Json<serde_json::Value>)> {
+    if body.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Empty request body"})),
+        ));
+    }
+
+    let filename = headers
+        .get("X-TinyTools-Filename")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| urlencoding::decode(v).unwrap_or_default().to_string())
+        .unwrap_or_else(|| "unnamed".to_string());
+
+    // Validate receive password if required
+    if let Some(ref expected_pwd) = state.receive_password {
+        let provided = headers
+            .get("X-TinyTools-Password")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if provided != expected_pwd {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Incorrect password"})),
+            ));
+        }
+    }
+
+    let transfer_id = uuid_simple();
+    let sender_ip = remote_addr.ip().to_string();
+    let file_size = body.len() as u64;
+
+    let incoming = IncomingTransfer {
+        id: transfer_id.clone(),
+        file_name: filename,
+        file_size,
+        sender_ip,
+        data: body.to_vec(),
+        encrypted: false,
+        encryption_salt: None,
+        encryption_nonce: None,
+        status: "pending".to_string(),
+        created_at: now_secs(),
+    };
+
+    {
+        let mut transfers = get_incoming_transfers().lock().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+        transfers.insert(transfer_id.clone(), incoming);
+    }
+
+    Ok(Json(UploadResponse { transfer_id }))
+}
+
+// ── API: Upload status poll (new) ───────────────────────────────────────
+
+#[derive(Serialize)]
+struct UploadStatusResponse {
+    status: String,
+}
+
+async fn upload_status(
+    Path(transfer_id): Path<String>,
+) -> Result<Json<UploadStatusResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let transfers = get_incoming_transfers().lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+    })?;
+
+    let status = transfers
+        .get(&transfer_id)
+        .map(|t| {
+            if t.status == "pending" && now_secs() - t.created_at > 120 {
+                "expired".to_string()
+            } else {
+                t.status.clone()
+            }
+        })
+        .unwrap_or_else(|| "not_found".to_string());
+
+    Ok(Json(UploadStatusResponse { status }))
+}
+
+// ── Server setup ────────────────────────────────────────────────────────
 
 pub async fn start_server(
     state: ServerState,
@@ -227,8 +419,11 @@ pub async fn start_server(
 
     let app = Router::new()
         .route("/", get(portal_page))
+        .route("/receive", get(receive_page))
         .route("/api/info", get(get_portal_info))
         .route("/api/download", get(download_file))
+        .route("/api/upload", post(handle_upload))
+        .route("/api/upload-status/{id}", get(upload_status))
         .with_state(state);
 
     let handle = tokio::spawn(async move {
@@ -239,3 +434,21 @@ pub async fn start_server(
 
     Ok((port, handle))
 }
+
+fn uuid_simple() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3],
+        bytes[4], bytes[5],
+        bytes[6], bytes[7],
+        bytes[8], bytes[9],
+        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+    )
+}
+
+use axum::routing::post;

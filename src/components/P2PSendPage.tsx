@@ -1,18 +1,20 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Globe, Upload, X, Shield, Eye, EyeOff, FileUp } from "lucide-react";
+import {
+  Globe, Upload, X, Shield, Eye, EyeOff, FileUp,
+} from "lucide-react";
 import * as p2p from "../lib/p2p-api";
 import { pickFile } from "../lib/tauri";
 import P2PWebPortal from "./P2PWebPortal";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-export default function P2PPage() {
+export default function P2PSendPage() {
   const [filePath, setFilePath] = useState("");
   const [fileName, setFileName] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [usePassword, setUsePassword] = useState(false);
+  const [sharePassword, setSharePassword] = useState("");
+  const [showSharePwd, setShowSharePwd] = useState(false);
+  const [useSharePwd, setUseSharePwd] = useState(false);
   const [portal, setPortal] = useState<p2p.PortalResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,7 +48,7 @@ export default function P2PPage() {
     try {
       const result = await p2p.startWebPortal(
         filePath,
-        usePassword && password ? password : undefined
+        useSharePwd && sharePassword ? sharePassword : undefined,
       );
       setPortal(result);
     } catch (e: any) {
@@ -68,9 +70,9 @@ export default function P2PPage() {
   return (
     <div className="flex flex-col h-full gap-4">
       <div>
-        <h2 className="text-xl font-semibold">Local Web Portal</h2>
+        <h2 className="text-xl font-semibold">Local Web Portal — Send</h2>
         <p className="text-sm text-white/40 mt-1">
-          Share files with anyone on the same Wi-Fi through their browser — no app needed
+          Share a file with anyone on the same Wi-Fi through their browser — no app needed
         </p>
       </div>
 
@@ -78,7 +80,7 @@ export default function P2PPage() {
         <div className="w-[340px] flex flex-col gap-3 overflow-y-auto pr-1">
           <div className="space-y-1.5">
             <span className="text-[10px] text-white/30 uppercase tracking-wider">
-              Select File to Share
+              Share a File
             </span>
           </div>
 
@@ -96,10 +98,7 @@ export default function P2PPage() {
                 <FileUp className="w-5 h-5 text-blue-400" />
                 <span className="text-sm text-white/70">{fileName}</span>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearFile();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); clearFile(); }}
                   className="text-white/30 hover:text-white/60"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -108,9 +107,7 @@ export default function P2PPage() {
             ) : (
               <>
                 <Upload className="w-8 h-8 text-white/30" />
-                <p className="text-sm text-white/60">
-                  Click to select a file
-                </p>
+                <p className="text-sm text-white/60">Click to select a file</p>
               </>
             )}
           </motion.div>
@@ -122,42 +119,36 @@ export default function P2PPage() {
             <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 border border-border">
               <div className="flex items-center gap-2">
                 <Shield className="w-3.5 h-3.5 text-white/40" />
-                <span className="text-xs text-white/60">Password protect</span>
+                <span className="text-xs text-white/60">Password protect download</span>
               </div>
               <button
-                onClick={() => setUsePassword(!usePassword)}
+                onClick={() => setUseSharePwd(!useSharePwd)}
                 className={`w-8 h-4 rounded-full transition-colors relative ${
-                  usePassword ? "bg-blue-500" : "bg-white/10"
+                  useSharePwd ? "bg-blue-500" : "bg-white/10"
                 }`}
               >
                 <div
                   className="w-3 h-3 rounded-full bg-white absolute top-0.5 transition-transform"
                   style={{
-                    transform: usePassword
-                      ? "translateX(16px)"
-                      : "translateX(2px)",
+                    transform: useSharePwd ? "translateX(16px)" : "translateX(2px)",
                   }}
                 />
               </button>
             </div>
-            {usePassword && (
+            {useSharePwd && (
               <div className="relative">
                 <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password..."
+                  type={showSharePwd ? "text" : "password"}
+                  value={sharePassword}
+                  onChange={(e) => setSharePassword(e.target.value)}
+                  placeholder="Enter download password..."
                   className="w-full rounded-xl bg-white/5 border border-border px-3 py-2 pr-9 text-sm text-white/90 placeholder:text-white/20 outline-none focus:border-border-hover transition-colors"
                 />
                 <button
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowSharePwd(!showSharePwd)}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-3.5 h-3.5" />
-                  ) : (
-                    <Eye className="w-3.5 h-3.5" />
-                  )}
+                  {showSharePwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
             )}
@@ -196,8 +187,8 @@ export default function P2PPage() {
               <Globe className="w-10 h-10 text-white/10" />
               <p className="text-sm text-white/50">No active local web portal</p>
               <p className="text-[10px] text-white/30 text-center max-w-xs">
-                Select a file and click "Start Local Web Portal" to generate a QR code.
-                Anyone on the same Wi-Fi can download the file through their browser.
+                Select a file and click "Start Local Web Portal". Others can download your file
+                at the share URL and send files to you at the receive URL.
               </p>
             </>
           )}

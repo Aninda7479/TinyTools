@@ -5,7 +5,7 @@ import {
   Paintbrush, Minimize, FileUp, Stamp, ArrowUpDown, RotateCw, Crop,
   Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
   Gauge, Zap, SplitSquareHorizontal, Combine, Palette,
-  ShieldCheck, FileLock, Film, Merge, Volume2
+  ShieldCheck, FileLock, Film, Merge, Volume2, Download,
 } from "lucide-react";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -16,7 +16,7 @@ export type Tool =
   | "qr" | "pdf"
   | "privacy" | "password" | "encryption"
   | "encoder" | "hasher"
-  | "p2p" | "video"
+  | "portal-send" | "portal-receive" | "video"
   | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share" | "cat-video";
 
 export interface Feature {
@@ -171,7 +171,8 @@ export const sidebarCategories: SidebarCategory[] = [
     icon: Radio,
     label: "Share",
     features: [
-      { icon: QrCode, title: "Local Web Portal", tag: "Network", tool: "p2p" },
+      { icon: QrCode, title: "Local Web Portal Send", tag: "Network", tool: "portal-send" },
+      { icon: Download, title: "Local Web Portal Receive", tag: "Network", tool: "portal-receive" },
     ],
   },
 ];
