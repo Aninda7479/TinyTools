@@ -105,18 +105,9 @@ pub fn run() {
             commands::encryption::decrypt_file_aes,
             commands::encryption::encrypt_file_chacha,
             commands::encryption::decrypt_file_chacha,
-            // P2P File Sharing
-            p2p::commands::start_discovery,
-            p2p::commands::stop_discovery,
-            p2p::commands::get_peers,
-            p2p::commands::send_file,
+            // Local Web Portal
             p2p::commands::start_web_portal,
             p2p::commands::stop_web_portal,
-            p2p::commands::get_transfer_progress,
-            p2p::commands::cancel_transfer,
-            p2p::commands::is_receiving,
-            p2p::commands::start_receiving,
-            p2p::commands::stop_receiving,
             p2p::commands::cleanup,
             // Video Tools
             commands::video_tools::get_video_info,

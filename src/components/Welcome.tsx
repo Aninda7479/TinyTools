@@ -151,9 +151,7 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
     label: "Share",
     icon: Radio,
     features: [
-      { icon: Radio, title: "P2P Send", tag: "Network", tool: "p2p", keywords: "p2p send file nearby device local network" },
       { icon: QrCode, title: "Local Web Portal", tag: "Network", tool: "p2p", keywords: "local web portal qr code download browser" },
-      { icon: Lock, title: "Encrypted Transfer", tag: "Network", tool: "p2p", keywords: "encrypted transfer password protected secure" },
     ],
   },
 ];
