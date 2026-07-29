@@ -31,6 +31,7 @@ export interface QrStyle {
   margin: number;
   logoDataUrl: string;
   logoSize: number;
+  logoMargin: number;
   frameEnabled: boolean;
   frameText: string;
   frameColor: string;
@@ -65,6 +66,7 @@ export const defaultStyle: QrStyle = {
   margin: 4,
   logoDataUrl: "",
   logoSize: 0.24,
+  logoMargin: 0.8,
   frameEnabled: false,
   frameText: "SCAN ME",
   frameColor: "#000000",
@@ -263,7 +265,7 @@ export function renderQrSvg(data: QrData, style: QrStyle): string {
     const logoPx = qrPixelSize * style.logoSize;
     const logoX = ox + (qrPixelSize - logoPx) / 2;
     const logoY = oy + (qrPixelSize - logoPx) / 2;
-    const logoPad = cellSize * 0.8;
+    const logoPad = cellSize * style.logoMargin;
     const bgX = logoX - logoPad;
     const bgY = logoY - logoPad;
     const bgSize = logoPx + logoPad * 2;
@@ -339,4 +341,24 @@ export async function exportQr(svgString: string, scale: number, format: "png" |
 
 export function svgToDataUrl(svg: string): string {
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const c = hex.replace("#", "");
+  return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+}
+
+function linearize(v: number): number {
+  const s = v / 255;
+  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+export function getContrastRatio(fg: string, bg: string): number {
+  const [r1, g1, b1] = hexToRgb(fg).map(linearize);
+  const [r2, g2, b2] = hexToRgb(bg).map(linearize);
+  const l1 = 0.2126 * r1 + 0.7152 * g1 + 0.0722 * b1;
+  const l2 = 0.2126 * r2 + 0.7152 * g2 + 0.0722 * b2;
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
 }

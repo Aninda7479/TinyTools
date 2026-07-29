@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ToolResult {
     pub success: bool,
     pub output_path: Option<String>,
@@ -15,7 +15,27 @@ pub struct ToolResult {
 pub struct PdfInfo {
     pub page_count: u32,
     pub file_size: u64,
+    pub file_size_str: String,
     pub version: String,
+    pub version_label: String,
+    pub title: Option<String>,
+    pub author: Option<String>,
+    pub subject: Option<String>,
+    pub keywords: Option<String>,
+    pub creator: Option<String>,
+    pub producer: Option<String>,
+    pub creation_date: Option<String>,
+    pub modification_date: Option<String>,
+    pub page_width: f64,
+    pub page_height: f64,
+    pub page_size_label: String,
+    pub orientation: String,
+    pub encrypted: bool,
+    pub has_acroform: bool,
+    pub printing_allowed: bool,
+    pub copying_allowed: bool,
+    pub modification_allowed: bool,
+    pub file_path: String,
 }
 
 fn open_doc(path: &str) -> Result<Document, String> {
@@ -28,6 +48,7 @@ fn parse_page_range(range: &str, total: usize) -> Result<Vec<u32>, String> {
         let part = part.trim();
         if part.contains('-') {
             let halves: Vec<&str> = part.split('-').collect();
+            if halves.len() != 2 { return Err(format!("Invalid range: {}", part)); }
             let start: u32 = halves[0].trim().parse().map_err(|_| format!("Bad: {}", halves[0]))?;
             let end: u32 = halves[1].trim().parse().map_err(|_| format!("Bad: {}", halves[1]))?;
             if start < 1 || end > total as u32 || start > end {
@@ -52,8 +73,9 @@ fn collect_page_ids(doc: &Document) -> Vec<ObjectId> {
 fn get_page_dimensions(doc: &Document, page_id: ObjectId) -> Result<(f64, f64), String> {
     let obj = doc.get_object(page_id).map_err(|e| e.to_string())?;
     let dict = obj.as_dict().map_err(|e| e.to_string())?;
-    let mb = dict.get(b"MediaBox").map_err(|_| "No MediaBox")?;
+    let mb = dict.get(b"MediaBox").map_err(|_| "No MediaBox".to_string())?;
     let arr = mb.as_array().map_err(|e| e.to_string())?;
+    if arr.len() < 4 { return Err("MediaBox must have 4 values".to_string()); }
     let w = obj_to_f64(&arr[2]).unwrap_or(612.0) - obj_to_f64(&arr[0]).unwrap_or(0.0);
     let h = obj_to_f64(&arr[3]).unwrap_or(792.0) - obj_to_f64(&arr[1]).unwrap_or(0.0);
     Ok((w, h))
@@ -109,10 +131,117 @@ fn ensure_page_has_font(doc: &mut Document, page_id: ObjectId, font_name: &[u8])
 #[tauri::command]
 pub fn get_pdf_info(input_path: String) -> Result<ToolResult, String> {
     let doc = open_doc(&input_path)?;
-    let page_count = doc.get_pages().len() as u32;
     let file_size = std::fs::metadata(&input_path).map_err(|e| e.to_string())?.len();
-    let info = PdfInfo { page_count, file_size, version: doc.version.clone() };
+    let page_count = doc.get_pages().len() as u32;
+
+    let file_size_str = if file_size < 1024 {
+        format!("{} B", file_size)
+    } else if file_size < 1024 * 1024 {
+        format!("{:.1} KB", file_size as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", file_size as f64 / (1024.0 * 1024.0))
+    };
+
+    let version_label = match doc.version.as_str() {
+        "1.0" => "PDF 1.0 (Acrobat 1.x)".to_string(),
+        "1.1" => "PDF 1.1 (Acrobat 2.x)".to_string(),
+        "1.2" => "PDF 1.2 (Acrobat 3.x)".to_string(),
+        "1.3" => "PDF 1.3 (Acrobat 4.x)".to_string(),
+        "1.4" => "PDF 1.4 (Acrobat 5.x)".to_string(),
+        "1.5" => "PDF 1.5 (Acrobat 6.x)".to_string(),
+        "1.6" => "PDF 1.6 (Acrobat 7.x)".to_string(),
+        "1.7" => "PDF 1.7 (Acrobat 8.x)".to_string(),
+        "2.0" => "PDF 2.0 (ISO 32000-2)".to_string(),
+        v => format!("PDF {}", v),
+    };
+
+    // Extract metadata from Info dictionary
+    let info_ref = doc.trailer.get(b"Info").ok().and_then(|o| o.as_reference().ok());
+    let info_dict = info_ref.and_then(|ref_id| doc.get_object(ref_id).ok())
+        .and_then(|obj| obj.as_dict().ok());
+
+    fn decode_pdf_string(obj: &Object) -> Option<String> {
+        match obj {
+            Object::String(bytes, _) => Some(String::from_utf8_lossy(bytes).to_string()),
+            Object::Name(bytes) => Some(String::from_utf8_lossy(bytes).to_string()),
+            _ => None,
+        }
+    }
+
+    let title = info_dict.and_then(|d| d.get(b"Title").ok()).and_then(|o| decode_pdf_string(o));
+    let author = info_dict.and_then(|d| d.get(b"Author").ok()).and_then(|o| decode_pdf_string(o));
+    let subject = info_dict.and_then(|d| d.get(b"Subject").ok()).and_then(|o| decode_pdf_string(o));
+    let keywords = info_dict.and_then(|d| d.get(b"Keywords").ok()).and_then(|o| decode_pdf_string(o));
+    let creator = info_dict.and_then(|d| d.get(b"Creator").ok()).and_then(|o| decode_pdf_string(o));
+    let producer = info_dict.and_then(|d| d.get(b"Producer").ok()).and_then(|o| decode_pdf_string(o));
+    let creation_date = info_dict.and_then(|d| d.get(b"CreationDate").ok()).and_then(|o| decode_pdf_string(o));
+    let modification_date = info_dict.and_then(|d| d.get(b"ModDate").ok()).and_then(|o| decode_pdf_string(o));
+
+    // Extract page dimensions from first page
+    let page_ids = collect_page_ids(&doc);
+    let (page_width, page_height, orientation, page_size_label) = if let Some(&pid) = page_ids.first() {
+        if let Ok((w, h)) = get_page_dimensions(&doc, pid) {
+            let (label, orient) = page_size_info(w, h);
+            (w, h, orient, label)
+        } else { (0.0, 0.0, "Unknown".to_string(), "Unknown".to_string()) }
+    } else { (0.0, 0.0, "Unknown".to_string(), "Unknown".to_string()) };
+
+    // Check encryption
+    let encrypted = doc.trailer.get(b"Encrypt").is_ok();
+
+    // Check for AcroForm
+    let root_ref = doc.trailer.get(b"Root").ok().and_then(|o| o.as_reference().ok());
+    let has_acroform = root_ref.and_then(|ref_id| doc.get_object(ref_id).ok())
+        .and_then(|obj| obj.as_dict().ok())
+        .map(|d| d.get(b"AcroForm").is_ok())
+        .unwrap_or(false);
+
+    // Permissions: default all allowed; check encryption dict if present
+    let (printing_allowed, copying_allowed, modification_allowed) = if encrypted {
+        let enc_dict = doc.trailer.get(b"Encrypt").ok()
+            .and_then(|o| o.as_reference().ok())
+            .and_then(|ref_id| doc.get_object(ref_id).ok())
+            .and_then(|obj| obj.as_dict().ok());
+        if let Some(d) = enc_dict {
+            let p = d.get(b"P").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0xFFFFFFF0);
+            (
+                (p & 4) != 0,
+                (p & 16) != 0,
+                (p & 8) != 0,
+            )
+        } else { (true, true, true) }
+    } else { (true, true, true) };
+
+    let info = PdfInfo {
+        page_count,
+        file_size,
+        file_size_str,
+        version: doc.version.clone(),
+        version_label,
+        title, author, subject, keywords, creator, producer,
+        creation_date, modification_date,
+        page_width, page_height, page_size_label, orientation,
+        encrypted, has_acroform,
+        printing_allowed, copying_allowed, modification_allowed,
+        file_path: input_path,
+    };
     Ok(ToolResult { success: true, output_path: None, message: serde_json::to_string(&info).unwrap_or_default() })
+}
+
+fn page_size_info(w: f64, h: f64) -> (String, String) {
+    let (w_pts, h_pts) = if w > h { (h, w) } else { (w, h) }; // normalize
+    let orientation = if w > h { "Landscape".to_string() } else { "Portrait".to_string() };
+    let label = match (w_pts.round(), h_pts.round()) {
+        (595.0, 842.0) => "A4".to_string(),
+        (420.0, 595.0) => "A5".to_string(),
+        (612.0, 792.0) => "Letter".to_string(),
+        (612.0, 1008.0) => "Legal".to_string(),
+        (486.0, 612.0) => "Executive".to_string(),
+        (842.0, 1191.0) => "A3".to_string(),
+        (1008.0, 612.0) => "Tabloid".to_string(),
+        _ => format!("{:.0} × {:.0} pt", w_pts, h_pts),
+    };
+    (format!("{} ({})", label, orientation), orientation)
 }
 
 // ═══════════════════════════════════════
@@ -135,7 +264,7 @@ pub fn merge_pdfs(input_paths: Vec<String>, output_path: String) -> Result<ToolR
         doc.renumber_objects_with(max_id);
         max_id = doc.max_id + 1;
 
-        documents_pages.extend(doc.get_pages().into_iter().map(|(_, object_id)| {
+        documents_pages.extend(doc.get_pages().into_iter().filter_map(|(_, object_id)| {
             if !first {
                 document.add_bookmark(
                     Bookmark::new(format!("Page_{}", pagenum), [0.0, 0.0, 1.0], 0, object_id), None,
@@ -143,7 +272,7 @@ pub fn merge_pdfs(input_paths: Vec<String>, output_path: String) -> Result<ToolR
                 first = true;
                 pagenum += 1;
             }
-            (object_id, doc.get_object(object_id).unwrap().to_owned())
+            doc.get_object(object_id).ok().map(|o| (object_id, o.to_owned()))
         }));
         documents_objects.extend(doc.objects);
     }
@@ -538,7 +667,7 @@ pub fn decrypt_pdf(input_path: String, output_path: String, password: String) ->
     use aes_gcm::aead::generic_array::GenericArray;
 
     let data = std::fs::read(&input_path).map_err(|e| format!("Failed to read file: {}", e))?;
-    if data.len() < 38 || &data[..6] != b"TTENC1" {
+    if data.len() < 42 || &data[..6] != b"TTENC1" {
         return Err("Not an encrypted TinyTools PDF (missing TTENC1 header)".into());
     }
     let salt = &data[6..22];
@@ -725,5 +854,445 @@ fn update_refs(obj: &mut Object, map: &BTreeMap<ObjectId, ObjectId>) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_pdf() -> tempfile::NamedTempFile {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let mut doc = Document::with_version("1.5");
+        let page_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Page".to_vec()),
+            b"MediaBox" => Object::Array(vec![
+                Object::Real(0.0), Object::Real(0.0),
+                Object::Real(612.0), Object::Real(792.0),
+            ]),
+        }));
+        let tree_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Pages".to_vec()),
+            b"Count" => Object::Integer(1),
+            b"Kids" => Object::Array(vec![Object::Reference(page_id)]),
+        }));
+        let catalog_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Catalog".to_vec()),
+            b"Pages" => Object::Reference(tree_id),
+        }));
+        let mut doc = doc;
+        if let Ok(Object::Dictionary(ref mut d)) = doc.get_object_mut(page_id) {
+            d.set("Parent", Object::Reference(tree_id));
+        }
+        doc.trailer.set("Root", catalog_id);
+        doc.save(file.path()).unwrap();
+        file
+    }
+
+    fn create_test_pdf_multi_page(n: u32) -> tempfile::NamedTempFile {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let mut doc = Document::with_version("1.5");
+        let mut page_ids = Vec::new();
+        for _ in 0..n {
+            let pid = doc.add_object(Object::Dictionary(dictionary! {
+                b"Type" => Object::Name(b"Page".to_vec()),
+                b"MediaBox" => Object::Array(vec![
+                    Object::Real(0.0), Object::Real(0.0),
+                    Object::Real(612.0), Object::Real(792.0),
+                ]),
+            }));
+            page_ids.push(pid);
+        }
+        let tree_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Pages".to_vec()),
+            b"Count" => Object::Integer(n as i64),
+            b"Kids" => Object::Array(page_ids.iter().map(|id| Object::Reference(*id)).collect()),
+        }));
+        let catalog_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Catalog".to_vec()),
+            b"Pages" => Object::Reference(tree_id),
+        }));
+        for &pid in &page_ids {
+            if let Ok(Object::Dictionary(ref mut d)) = doc.get_object_mut(pid) {
+                d.set("Parent", Object::Reference(tree_id));
+            }
+        }
+        doc.trailer.set("Root", catalog_id);
+        doc.save(file.path()).unwrap();
+        file
+    }
+
+    #[test]
+    fn test_get_pdf_info() {
+        let f = create_test_pdf();
+        let r = get_pdf_info(f.path().to_str().unwrap().to_string()).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("page_count"));
+        assert!(r.message.contains("file_size"));
+    }
+
+    #[test]
+    fn test_merge_pdfs() {
+        let f1 = create_test_pdf();
+        let f2 = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = merge_pdfs(
+            vec![f1.path().to_str().unwrap().to_string(), f2.path().to_str().unwrap().to_string()],
+            out.path().to_str().unwrap().to_string(),
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("2 files"));
+        // Verify output is valid
+        let merged = open_doc(out.path().to_str().unwrap()).unwrap();
+        assert_eq!(merged.get_pages().len(), 2);
+    }
+
+    #[test]
+    fn test_merge_pdfs_empty_fails() {
+        let r = merge_pdfs(vec![], "out.pdf".to_string());
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_split_pdf() {
+        let f = create_test_pdf_multi_page(3);
+        let dir = tempfile::TempDir::new().unwrap();
+        let r = split_pdf(
+            f.path().to_str().unwrap().to_string(),
+            dir.path().to_str().unwrap().to_string(),
+            Some("1-2".to_string()),
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("2"));
+        assert!(dir.path().join("page_1.pdf").exists());
+        assert!(dir.path().join("page_2.pdf").exists());
+    }
+
+    #[test]
+    fn test_split_pdf_all_pages() {
+        let f = create_test_pdf_multi_page(3);
+        let dir = tempfile::TempDir::new().unwrap();
+        let r = split_pdf(
+            f.path().to_str().unwrap().to_string(),
+            dir.path().to_str().unwrap().to_string(),
+            None,
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("3"));
+        for i in 1..=3 {
+            assert!(dir.path().join(format!("page_{}.pdf", i)).exists());
+        }
+    }
+
+    #[test]
+    fn test_reorder_pages() {
+        let f = create_test_pdf_multi_page(3);
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = reorder_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            vec![3, 1, 2],
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("3"));
+    }
+
+    #[test]
+    fn test_reorder_pages_out_of_range_fails() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = reorder_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            vec![5],
+        );
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_rotate_pages() {
+        let f = create_test_pdf_multi_page(3);
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = rotate_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            Some("1-2".to_string()), 90,
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("2 pages"));
+    }
+
+    #[test]
+    fn test_rotate_pages_all() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = rotate_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            None, 180,
+        ).unwrap();
+        assert!(r.success);
+    }
+
+    #[test]
+    fn test_crop_pages() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = crop_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            None, 10.0, 10.0, 10.0, 10.0,
+        ).unwrap();
+        assert!(r.success);
+    }
+
+    #[test]
+    fn test_crop_pages_invalid_fails() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = crop_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            None, 1000.0, 0.0, 0.0, 0.0,
+        );
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_delete_pages() {
+        let f = create_test_pdf_multi_page(3);
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = delete_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            vec![2],
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("Deleted 1 pages, 2 remaining"));
+        let doc = open_doc(out.path().to_str().unwrap()).unwrap();
+        assert_eq!(doc.get_pages().len(), 2);
+    }
+
+    #[test]
+    fn test_delete_pages_out_of_range_fails() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = delete_pages(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            vec![10],
+        );
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_compress_pdf() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = compress_pdf(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+        ).unwrap();
+        assert!(r.success);
+    }
+
+    #[test]
+    fn test_flatten_pdf() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = flatten_pdf(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+        ).unwrap();
+        assert!(r.success);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_pdf_roundtrip() {
+        let f = create_test_pdf();
+        let original_bytes = std::fs::read(f.path()).unwrap();
+        let encrypted = tempfile::NamedTempFile::new().unwrap();
+        let decrypted = tempfile::NamedTempFile::new().unwrap();
+
+        let r = encrypt_pdf(
+            f.path().to_str().unwrap().to_string(),
+            encrypted.path().to_str().unwrap().to_string(),
+            "mypassword".to_string(),
+            String::new(),
+        ).unwrap();
+        assert!(r.success);
+        assert!(encrypted.path().exists());
+
+        let r = decrypt_pdf(
+            encrypted.path().to_str().unwrap().to_string(),
+            decrypted.path().to_str().unwrap().to_string(),
+            "mypassword".to_string(),
+        ).unwrap();
+        assert!(r.success);
+        let decrypted_bytes = std::fs::read(decrypted.path()).unwrap();
+        assert_eq!(original_bytes, decrypted_bytes);
+    }
+
+    #[test]
+    fn test_decrypt_pdf_wrong_password_fails() {
+        let f = create_test_pdf();
+        let encrypted = tempfile::NamedTempFile::new().unwrap();
+        let decrypted = tempfile::NamedTempFile::new().unwrap();
+
+        encrypt_pdf(
+            f.path().to_str().unwrap().to_string(),
+            encrypted.path().to_str().unwrap().to_string(),
+            "pass".to_string(), String::new(),
+        ).unwrap();
+
+        let r = decrypt_pdf(
+            encrypted.path().to_str().unwrap().to_string(),
+            decrypted.path().to_str().unwrap().to_string(),
+            "wrong".to_string(),
+        );
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_decrypt_pdf_invalid_header_fails() {
+        let f = create_test_pdf();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = decrypt_pdf(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            "x".to_string(),
+        );
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("TTENC1"));
+    }
+
+    #[test]
+    fn test_unwrap_pdf() {
+        let f = create_test_pdf();
+        let encrypted = tempfile::NamedTempFile::new().unwrap();
+        let decrypted = tempfile::NamedTempFile::new().unwrap();
+
+        encrypt_pdf(
+            f.path().to_str().unwrap().to_string(),
+            encrypted.path().to_str().unwrap().to_string(),
+            "pass".to_string(), String::new(),
+        ).unwrap();
+
+        let r = unwrap_pdf(
+            encrypted.path().to_str().unwrap().to_string(),
+            decrypted.path().to_str().unwrap().to_string(),
+            "pass".to_string(),
+        ).unwrap();
+        assert!(r.success);
+    }
+
+    #[test]
+    fn test_extract_text() {
+        // Create a PDF with text content
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let mut doc = Document::with_version("1.5");
+        let content_bytes = Content { operations: vec![
+            Operation::new("BT", vec![]),
+            Operation::new("Tf", vec![Object::Name(b"Helvetica".to_vec()), Object::Real(12.0)]),
+            Operation::new("Td", vec![Object::Real(10.0), Object::Real(50.0)]),
+            Operation::new("Tj", vec![Object::String(b"Hello PDF".to_vec(), StringFormat::Literal)]),
+            Operation::new("ET", vec![]),
+        ]}.encode().unwrap();
+        let content_id = doc.add_object(Object::Stream(Stream::new(lopdf::Dictionary::new(), content_bytes)));
+        let page_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Page".to_vec()),
+            b"MediaBox" => Object::Array(vec![
+                Object::Real(0.0), Object::Real(0.0), Object::Real(612.0), Object::Real(792.0),
+            ]),
+            b"Contents" => Object::Reference(content_id),
+            b"Resources" => Object::Dictionary(lopdf::Dictionary::new()),
+        }));
+        let tree_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Pages".to_vec()),
+            b"Count" => Object::Integer(1),
+            b"Kids" => Object::Array(vec![Object::Reference(page_id)]),
+        }));
+        if let Ok(Object::Dictionary(ref mut d)) = doc.get_object_mut(page_id) {
+            d.set("Parent", Object::Reference(tree_id));
+        }
+        let catalog_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Catalog".to_vec()),
+            b"Pages" => Object::Reference(tree_id),
+        }));
+        doc.trailer.set("Root", catalog_id);
+        doc.save(file.path()).unwrap();
+
+        let r = extract_text(file.path().to_str().unwrap().to_string()).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("Hello PDF"));
+    }
+
+    #[test]
+    fn test_parse_page_range_simple() {
+        let r = parse_page_range("1,3,5", 10).unwrap();
+        assert_eq!(r, vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn test_parse_page_range_with_dash() {
+        let r = parse_page_range("2-4", 10).unwrap();
+        assert_eq!(r, vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn test_parse_page_range_combined() {
+        let r = parse_page_range("1,3-5,7", 10).unwrap();
+        assert_eq!(r, vec![1, 3, 4, 5, 7]);
+    }
+
+    #[test]
+    fn test_parse_page_range_out_of_range_fails() {
+        let r = parse_page_range("1-20", 10);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_parse_page_range_start_greater_than_end_fails() {
+        let r = parse_page_range("5-3", 10);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_parse_page_range_multi_dash_fails() {
+        let r = parse_page_range("1-2-3", 10);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_parse_page_range_bad_segment_fails() {
+        let r = parse_page_range("abc", 10);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_add_page_numbers() {
+        let f = create_test_pdf_multi_page(3);
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = add_page_numbers(
+            f.path().to_str().unwrap().to_string(),
+            out.path().to_str().unwrap().to_string(),
+            12.0, "bottom-center".to_string(),
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("3"));
+    }
+
+    #[test]
+    fn test_add_page_numbers_all_positions() {
+        let f = create_test_pdf();
+        for pos in &["top-center", "top-left", "top-right", "bottom-left", "bottom-right", "bottom-center"] {
+            let out = tempfile::NamedTempFile::new().unwrap();
+            let r = add_page_numbers(
+                f.path().to_str().unwrap().to_string(),
+                out.path().to_str().unwrap().to_string(),
+                12.0, pos.to_string(),
+            ).unwrap();
+            assert!(r.success, "Failed for position: {}", pos);
+        }
     }
 }

@@ -6,12 +6,13 @@ import {
   Play, X, ChevronLeft, CheckCircle, AlertTriangle
 } from "lucide-react";
 import {
-  getPdfInfo, mergePdfs, splitPdf, reorderPages, rotatePages,
+  mergePdfs, splitPdf, reorderPages, rotatePages,
   cropPages, deletePages, imagesToPdf, extractPdfText,
   encryptPdf, decryptPdf, unwrapPdf, compressPdf, flattenPdf,
   addPdfWatermark, addPageNumbers, pickFiles
 } from "../lib/tauri";
 import type { ToolResult } from "../lib/tauri";
+import PdfInfoPage from "./PdfInfoPage";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -84,6 +85,12 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     setPages("");
     setOrderStr("");
     setPassword("");
+    setOwnerPassword("");
+    setAngle(90);
+    setCropTop(0); setCropBottom(0); setCropLeft(0); setCropRight(0);
+    setWmText(""); setWmSize(48); setWmOpacity(0.3); setWmAngle(-45);
+    setPnSize(12); setPnPos("bottom-center");
+    setMargin(20);
   };
 
   const openPicker = useCallback(async () => {
@@ -120,15 +127,6 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
 
   const renderToolPanel = () => {
     switch (tool) {
-      case "info":
-        return (
-          <>
-            <p className="text-xs text-white/40">Select a PDF to view its info</p>
-            {result && (
-              <pre className="text-xs text-white/70 bg-white/5 p-3 rounded-lg whitespace-pre-wrap">{result.message}</pre>
-            )}
-          </>
-        );
       case "merge":
         return <p className="text-xs text-white/40">Select 2+ PDF files to merge in order</p>;
       case "split":
@@ -274,8 +272,6 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     const paths = files.map(f => f.path);
 
     switch (tool) {
-      case "info":
-        return run(() => getPdfInfo(paths[0]));
       case "merge":
         return run(() => mergePdfs(paths, outPath("merged.pdf")));
       case "split":
@@ -347,6 +343,10 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     );
   }
 
+  if (tool === "info") {
+    return <PdfInfoPage onBack={reset} />;
+  }
+
   const toolCard = tools.find(t => t.id === tool)!;
 
   return (
@@ -379,11 +379,11 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           >
             {files.length > 0 ? (
               <div className="flex gap-2 flex-wrap">
-                {files.map((f, i) => (
-                  <div key={i} className="relative group flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                {files.map((f) => (
+                  <div key={f.path} className="relative group flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
                     <FileText className="w-4 h-4 text-white/50" />
                     <span className="text-xs text-white/70 max-w-[150px] truncate">{f.name}</span>
-                    <button onClick={e => { e.stopPropagation(); setFiles(p => p.filter((_, j) => j !== i)); }}
+                    <button onClick={e => { e.stopPropagation(); setFiles(p => p.filter(x => x.path !== f.path)); }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity">
                       <X className="w-3 h-3 text-white/40" />
                     </button>
@@ -412,7 +412,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           {/* Result */}
           <AnimatePresence>
             {result && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              <motion.div key="result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                 className="flex items-start gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                 <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                 <div className="text-xs text-emerald-300/80 whitespace-pre-wrap break-all">{result.message}</div>
@@ -421,7 +421,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           </AnimatePresence>
           <AnimatePresence>
             {error && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              <motion.div key="error" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                 className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
                 <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
                 <div className="text-xs text-red-300/80 whitespace-pre-wrap break-all">{error}</div>

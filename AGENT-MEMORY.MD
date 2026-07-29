@@ -47,6 +47,7 @@
 ### `commands/pdf_tools.rs` (lopdf 0.44)
 - 15 commands: merge, split, reorder, rotate, crop, delete, images_to_pdf, extract_text, compress, flatten, add_pdf_watermark, add_page_numbers
 - `encrypt_pdf` / `decrypt_pdf` / `unwrap_pdf` — AES-256-GCM + Argon2id KDF, TTENC1 wire format
+- **29 unit tests** covering all commands, edge cases, and error paths
 
 ### `commands/encoder.rs` — 27 commands
 - Base64/URL/B32/B58/Hex/URL/HTML/Unicode/JWT/Morse/Binary/Octal
@@ -205,6 +206,7 @@ npx tsc --noEmit
 - [x] Encoder file mode (encode_file, decode_file, decode_text_to_file)
 - [x] Password generator redesign (inline sub-tools + customization)
 - [x] Encryption page overhaul (auto-process, encoding selector, metadata, entropy, file mode, XOR encoding)
+- [x] PDF comprehensive tests (29 unit tests across all 16 commands)
 - [ ] P2P: Cross-network WebRTC transfers (Phase 3)
 - [ ] P2P: Pause/resume transfers
 - [ ] P2P: Chunked streaming sender (currently full file in memory)
