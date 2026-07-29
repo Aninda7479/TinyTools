@@ -120,8 +120,20 @@ export default function HasherPage({ defaultSub }: { defaultSub?: string } = {})
   }, []);
 
   const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+    } catch {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    }
     setTimeout(() => setCopied(false), 1500);
   };
 
