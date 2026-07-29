@@ -279,14 +279,24 @@ pub fn start_web_portal(
 
     {
         let mut guard = get_state().lock().map_err(|e| e.to_string())?;
-        if let Some(ref mut p2p) = *guard {
-            if let Some(old) = p2p.server_handle.take() {
-                old.abort();
-            }
-            p2p.server_handle = Some(handle);
-            p2p.server_port = Some(port);
-            p2p.server_runtime = Some(rt);
+        // The web portal can be opened without first using peer discovery.
+        // Ensure the state exists so it owns the Tokio runtime that keeps the
+        // HTTP server alive after this command returns.
+        let p2p = guard.get_or_insert_with(|| P2PState {
+            mdns_service: None,
+            peers: Vec::new(),
+            transfers: std::collections::HashMap::new(),
+            server_handle: None,
+            server_port: None,
+            server_runtime: None,
+            receiving: false,
+        });
+        if let Some(old) = p2p.server_handle.take() {
+            old.abort();
         }
+        p2p.server_handle = Some(handle);
+        p2p.server_port = Some(port);
+        p2p.server_runtime = Some(rt);
     }
 
     let url = format!("http://{}:{}", local_ip, port);
