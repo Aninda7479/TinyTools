@@ -1,5 +1,9 @@
 use image::Rgba;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::io::{Read, Write};
+use img_parts::{jpeg::Jpeg, ImageEXIF, ImageICC};
 
 #[derive(Serialize, Deserialize)]
 pub struct ToolResult {
@@ -8,8 +12,68 @@ pub struct ToolResult {
     pub message: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct MetadataResult {
+    pub success: bool,
+    pub metadata: HashMap<String, String>,
+    pub message: String,
+}
+
+#[tauri::command]
+pub fn read_metadata(input_path: String) -> Result<MetadataResult, String> {
+    let file = fs::File::open(&input_path).map_err(|e| e.to_string())?;
+    let mut reader = std::io::BufReader::new(&file);
+    let exif = exif::Reader::new()
+        .read_from_container(&mut reader)
+        .map_err(|e| e.to_string());
+        
+    let mut metadata = HashMap::new();
+    
+    match exif {
+        Ok(exif_data) => {
+            for f in exif_data.fields() {
+                let tag = f.tag.to_string();
+                let value = f.display_value().with_unit(&exif_data).to_string();
+                metadata.insert(tag, value);
+            }
+            Ok(MetadataResult {
+                success: true,
+                metadata,
+                message: "Metadata extracted".into(),
+            })
+        }
+        Err(_) => {
+            Ok(MetadataResult {
+                success: true,
+                metadata,
+                message: "No EXIF metadata found".into(),
+            })
+        }
+    }
+}
+
 #[tauri::command]
 pub fn strip_metadata(input_path: String, output_path: String) -> Result<ToolResult, String> {
+    let mut file = fs::File::open(&input_path).map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+
+    let lower_path = input_path.to_lowercase();
+    if lower_path.ends_with(".jpg") || lower_path.ends_with(".jpeg") {
+        if let Ok(mut jpeg) = Jpeg::from_bytes(buf.into()) {
+            jpeg.set_exif(None);
+            jpeg.set_icc_profile(None);
+            let mut out = fs::File::create(&output_path).map_err(|e| e.to_string())?;
+            jpeg.encoder().write_to(&mut out).map_err(|e| e.to_string())?;
+            return Ok(ToolResult {
+                success: true,
+                output_path: Some(output_path),
+                message: "Metadata stripped losslessly".into(),
+            });
+        }
+    }
+    
+    // Fallback for png and others
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     img.save(&output_path).map_err(|e| e.to_string())?;
     Ok(ToolResult {

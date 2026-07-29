@@ -21,6 +21,7 @@ pub fn run() {
             commands::ai_tools::smart_sharpen,
             commands::ai_tools::depth_blur,
             // Privacy
+            commands::privacy::read_metadata,
             commands::privacy::strip_metadata,
             commands::privacy::redact_regions,
             commands::privacy::add_watermark,

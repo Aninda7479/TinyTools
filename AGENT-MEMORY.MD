@@ -73,6 +73,21 @@
 
 ---
 
+## WebAssembly Hybrid Engine (`src-wasm/src/`)
+
+**Arch:** Pure Rust mathematical image processing ported to WebAssembly (`wasm32-unknown-unknown`) using `wasm-bindgen` and `js-sys`. Allows the desktop application to run 100% locally in any web browser without needing the native Rust backend.
+
+| File | Purpose |
+|------|---------|
+| `lib.rs` | Entry points for EXIF stripping, sensitive redactor (pixelate/blur), and text watermarks. |
+| `ai_tools.rs` | Background removal (perceptual distance + Otsu), inpainting, upscaling (Lanczos3), filters. |
+| `editing.rs` | Smart crop, expand canvas, split image into grid, stitch panoramas. |
+| `conversion.rs` | Image resizing, format conversion (JPEG/PNG), rotation, grayscale, blur, sharpen. |
+
+**Wire Protocol:** TypeScript wrappers in `tauri.ts` (`runWasmProcess`) fetch local blob URLs, convert them to `Uint8Array`, pass them to WASM, and convert the returned `Uint8Array` back into an object URL for instant download in the browser.
+
+---
+
 ## P2P File Sharing Module (`src-tauri/src/p2p/`)
 
 **Arch:** `OnceLock<Mutex<Option<P2PState>>>` singleton (avoids serialization issues). mDNS (`_tinytools._tcp.local.`) + Axum HTTP server (port 0, OS-assigned) + AES-256-GCM + HMAC-SHA256 password verification.
@@ -182,23 +197,15 @@ npx tsc --noEmit
 ---
 
 ## Git History (recent)
+- `WASM Migration` — feat: ported AI tools, editing, processing, and privacy tools to WebAssembly (`src-wasm`). Added interactive drag-to-draw redactor UI.
 - `92265a6` — feat: refactor password modes with labels/descriptions + Toggle component
 - `96094c6` — feat: add `fs:allow-write-text-file` permission
 - `dbb38d9` — feat: file encoding/decoding (`encode_file`, `decode_file`, `decode_text_to_file`)
 - `692a795` — Global Share: Beta
-- `fdf50d3` — feat: dynamic PBKDF2 iterations + decrypt for uploaded files
-- `86d4924` — feat: `revealInFolder` command + `IncomingTransferInfo.save_path`
-- `1693efe` — feat: P2P file handling + status updates
-- `b453d06` — split Local Web Portal into Send/Receive with save-dialog download
-- `e23417b` — remove P2P send/receive/scan, keep only Local Web Portal
-- `1b6561b` — rename: Web Portal → Local Web Portal
-- `ad75075` — feat: HTTPS web portal + QR code usage instructions
-- `d09146a` — feat: file encryption for web portal downloads + download limits
-- `664f81a` — fix: P2P state existence check for web portal runtime
-- `31aad92` — fix: web portal server killed immediately (runtime dropped)
-- `d2b19d2` — fix: web portal HTML fetches `/api/info` + proper download
 
 ## In-Progress / Backlog
+- [x] Full WebAssembly Migration for Image Tools
+- [x] Interactive UI for Sensitive Redactor
 - [x] P2P file sharing (Phases 1+2)
 - [x] Welcome page redesign (7 sections, 42 cards)
 - [x] Sidebar redesign + CategoryPage
@@ -210,4 +217,4 @@ npx tsc --noEmit
 - [ ] P2P: Chunked streaming sender (currently full file in memory)
 - [ ] Real face detection for smart_sharpen
 - [ ] True AI colorization (currently sepia filter)
-- [ ] Font fallback for watermark (hardcoded Arial)
+- [ ] Font fallback for watermark (hardcoded Arial/Inter)

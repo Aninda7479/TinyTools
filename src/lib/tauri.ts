@@ -1,5 +1,38 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+
+export const isTauri = () => typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__ !== undefined;
+
+const invoke = async <T>(cmd: string, args?: any): Promise<T> => {
+  if (!isTauri()) {
+    throw new Error(`Backend command '${cmd}' is not available in the web browser.`);
+  }
+  return tauriInvoke<T>(cmd, args);
+};
+
+function webPickFiles(multiple: boolean, filters?: { name: string; extensions: string[] }[]): Promise<FileInfo[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = multiple;
+    
+    if (filters && filters.length > 0) {
+      const accept = filters.flatMap(f => f.extensions.map(ext => `.${ext}`)).join(",");
+      input.accept = accept;
+    }
+
+    input.onchange = (e) => {
+      const files = Array.from((e.target as HTMLInputElement).files || []);
+      resolve(files.map(f => ({
+        name: f.name,
+        path: URL.createObjectURL(f), // Use ObjectURL so it can be previewed locally
+        size: f.size,
+        extension: f.name.includes(".") ? f.name.split(".").pop()! : ""
+      })));
+    };
+    input.click();
+  });
+}
 
 export interface FileInfo {
   name: string;
@@ -20,6 +53,10 @@ async function pathToFileInfo(p: string): Promise<FileInfo> {
 }
 
 export async function pickFile(filters?: { name: string; extensions: string[] }[]): Promise<FileInfo | null> {
+  if (!isTauri()) {
+    const files = await webPickFiles(false, filters);
+    return files.length > 0 ? files[0] : null;
+  }
   const selected = await open({ multiple: false, filters });
   if (!selected) return null;
   const p = typeof selected === "string" ? selected : selected;
@@ -27,6 +64,9 @@ export async function pickFile(filters?: { name: string; extensions: string[] }[
 }
 
 export async function pickFiles(filters?: { name: string; extensions: string[] }[]): Promise<FileInfo[]> {
+  if (!isTauri()) {
+    return webPickFiles(true, filters);
+  }
   const selected = await open({ multiple: true, filters });
   if (!selected) return [];
   const paths = Array.isArray(selected) ? selected : [selected];
@@ -57,61 +97,295 @@ export interface BatchResult {
   message: string;
 }
 
+async function runWasmProcess(input: string, output: string, wasmCallback: (wasm: any, bytes: Uint8Array) => any, message: string): Promise<ToolResult> {
+  try {
+    const res = await fetch(input);
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    // @ts-ignore
+    const wasm = await import('./wasm/tinytools_wasm.js');
+    await wasm.default();
+    
+    const processedBytes = wasmCallback(wasm, bytes);
+    const blob = new Blob([processedBytes as unknown as BlobPart], { type: 'image/png' });
+    const objectUrl = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = output.split('/').pop() || 'processed.png';
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+    
+    return { success: true, output_path: output, message };
+  } catch (e: any) {
+    return { success: false, output_path: null, message: e.toString() };
+  }
+}
+
 export async function processImage(input: string, output: string, operation: string, params?: Record<string, unknown>): Promise<ToolResult> {
+  if (!isTauri()) {
+    const p = params ? JSON.stringify(params) : null;
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.process_image(bytes, operation, p), `Processed with ${operation}`);
+  }
   return invoke<ToolResult>("process_image", { inputPath: input, outputPath: output, operation, params: params ? JSON.stringify(params) : null });
 }
 export async function removeBackground(input: string, output: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.remove_background(bytes), "Background removed via WASM");
+  }
   return invoke<ToolResult>("remove_background", { inputPath: input, outputPath: output });
 }
 export async function inpaintImage(input: string, output: string, regions: [number, number, number, number][]): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.inpaint_image(bytes, JSON.stringify(regions)), "Inpainted via WASM");
+  }
   return invoke<ToolResult>("inpaint_image", { inputPath: input, outputPath: output, regions });
 }
 export async function upscaleImage(input: string, output: string, scale: number): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.upscale_image(bytes, scale), `Upscaled ${scale}x via WASM`);
+  }
   return invoke<ToolResult>("upscale_image", { inputPath: input, outputPath: output, scale });
 }
 export async function sepiaFilter(input: string, output: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.sepia_filter(bytes), "Sepia filter applied via WASM");
+  }
   return invoke<ToolResult>("sepia_filter", { inputPath: input, outputPath: output });
 }
 export async function smartSharpen(input: string, output: string, strength: number): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.smart_sharpen(bytes, strength), "Smart sharpen applied via WASM");
+  }
   return invoke<ToolResult>("smart_sharpen", { inputPath: input, outputPath: output, strength });
 }
 export async function depthBlur(input: string, output: string, blurStrength: number): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.depth_blur(bytes, blurStrength), "Depth blur applied via WASM");
+  }
   return invoke<ToolResult>("depth_blur", { inputPath: input, outputPath: output, blurStrength });
 }
 
 // Privacy
+export interface MetadataResult {
+  success: boolean;
+  metadata: Record<string, string>;
+  message: string;
+}
+
+export async function readMetadata(input: string): Promise<MetadataResult> {
+  if (!isTauri()) {
+    try {
+      const res = await fetch(input);
+      const buffer = await res.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      // @ts-ignore
+      const wasm = await import('./wasm/tinytools_wasm.js');
+      await wasm.default();
+      const result: any = wasm.read_metadata(bytes);
+      
+      // serde-wasm-bindgen converts Rust HashMaps into ES6 Maps by default.
+      // We must convert it back to a plain JS object so Object.keys() works in React.
+      if (result && result.metadata instanceof Map) {
+        result.metadata = Object.fromEntries(result.metadata);
+      }
+      
+      return result as MetadataResult;
+    } catch (e: any) {
+      console.error("WASM readMetadata error:", e);
+      return { success: false, metadata: {}, message: e.toString() };
+    }
+  }
+  return invoke<MetadataResult>("read_metadata", { inputPath: input });
+}
+
 export async function stripMetadata(input: string, output: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    try {
+      const res = await fetch(input);
+      const buffer = await res.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const isJpeg = input.toLowerCase().includes('.jpg') || input.toLowerCase().includes('.jpeg');
+      
+      // @ts-ignore
+      const wasm = await import('./wasm/tinytools_wasm.js');
+      await wasm.default();
+      
+      const strippedBytes = wasm.strip_metadata(bytes, isJpeg);
+      const blob = new Blob([strippedBytes as unknown as BlobPart], { type: isJpeg ? 'image/jpeg' : 'image/png' });
+      const objectUrl = URL.createObjectURL(blob);
+      
+      // Since it's web, trigger a download
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = output.split('/').pop() || 'stripped_image.jpg';
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+      
+      return { success: true, output_path: output, message: "Metadata has been successfully stripped" };
+    } catch (e: any) {
+      return { success: false, output_path: null, message: e.toString() };
+    }
+  }
   return invoke<ToolResult>("strip_metadata", { inputPath: input, outputPath: output });
 }
 export async function redactRegions(input: string, output: string, regions: [number, number, number, number][], method: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    try {
+      const res = await fetch(input);
+      const buffer = await res.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      
+      // @ts-ignore
+      const wasm = await import('./wasm/tinytools_wasm.js');
+      await wasm.default();
+      
+      const regionsJson = JSON.stringify(regions);
+      // @ts-ignore
+      const processedBytes = wasm.redact_regions(bytes, regionsJson, method);
+      
+      const blob = new Blob([processedBytes as unknown as BlobPart], { type: 'image/png' });
+      const objectUrl = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = output.split('/').pop() || 'redacted_image.png';
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+      
+      return { success: true, output_path: output, message: "Regions redacted securely via WASM" };
+    } catch (e: any) {
+      return { success: false, output_path: null, message: e.toString() };
+    }
+  }
   return invoke<ToolResult>("redact_regions", { inputPath: input, outputPath: output, regions, method });
 }
 export async function addWatermark(input: string, output: string, text: string, opacity: number, position: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    try {
+      const res = await fetch(input);
+      const buffer = await res.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      
+      // @ts-ignore
+      const wasm = await import('./wasm/tinytools_wasm.js');
+      await wasm.default();
+      
+      // @ts-ignore
+      const processedBytes = wasm.add_watermark(bytes, text, opacity, position);
+      
+      const blob = new Blob([processedBytes as unknown as BlobPart], { type: 'image/png' });
+      const objectUrl = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = output.split('/').pop() || 'watermarked_image.png';
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+      
+      return { success: true, output_path: output, message: "Watermark applied securely via WASM" };
+    } catch (e: any) {
+      return { success: false, output_path: null, message: e.toString() };
+    }
+  }
   return invoke<ToolResult>("add_watermark", { inputPath: input, outputPath: output, text, opacity, position });
 }
 export async function addImageWatermark(input: string, watermark: string, output: string, opacity: number, scale: number, position?: string): Promise<ToolResult> {
   return invoke<ToolResult>("add_image_watermark", { inputPath: input, watermarkPath: watermark, outputPath: output, opacity, scale, position: position ?? null });
 }
 
+async function runWasmSplit(input: string, outputDir: string, rows: number, cols: number): Promise<ToolResult> {
+  try {
+    const res = await fetch(input);
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    // @ts-ignore
+    const wasm = await import('./wasm/tinytools_wasm.js');
+    await wasm.default();
+    
+    const arr = wasm.split_image(bytes, rows, cols);
+    for (let i = 0; i < arr.length; i++) {
+      const processedBytes = arr[i];
+      const blob = new Blob([processedBytes as unknown as BlobPart], { type: 'image/png' });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `split_${i}.png`;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    }
+    return { success: true, output_path: outputDir, message: `Split into ${rows * cols} pieces` };
+  } catch (e: any) {
+    return { success: false, output_path: null, message: e.toString() };
+  }
+}
+
+async function runWasmStitch(paths: string[], output: string, direction: string): Promise<ToolResult> {
+  try {
+    const imagesData = [];
+    for (const p of paths) {
+      const res = await fetch(p);
+      const buffer = await res.arrayBuffer();
+      imagesData.push(new Uint8Array(buffer));
+    }
+    // @ts-ignore
+    const wasm = await import('./wasm/tinytools_wasm.js');
+    await wasm.default();
+    
+    const processedBytes = wasm.stitch_images(imagesData, direction);
+    const blob = new Blob([processedBytes as unknown as BlobPart], { type: 'image/png' });
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = output.split('/').pop() || 'stitched.png';
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+    
+    return { success: true, output_path: output, message: "Images stitched" };
+  } catch (e: any) {
+    return { success: false, output_path: null, message: e.toString() };
+  }
+}
+
 // Editing
 export async function smartCrop(input: string, output: string, width: number, height: number, gravity: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.smart_crop(bytes, width, height, gravity), "Cropped via WASM");
+  }
   return invoke<ToolResult>("smart_crop", { inputPath: input, outputPath: output, width, height, gravity });
 }
 export async function expandCanvas(input: string, output: string, top: number, bottom: number, left: number, right: number, color: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.expand_canvas(bytes, top, bottom, left, right, color), "Canvas expanded via WASM");
+  }
   return invoke<ToolResult>("expand_canvas", { inputPath: input, outputPath: output, top, bottom, left, right, color });
 }
 export async function splitImage(input: string, outputDir: string, rows: number, cols: number): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmSplit(input, outputDir, rows, cols);
+  }
   return invoke<ToolResult>("split_image", { inputPath: input, outputDir: outputDir, rows, cols });
 }
 export async function stitchImages(paths: string[], output: string, direction: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    return runWasmStitch(paths, output, direction);
+  }
   return invoke<ToolResult>("stitch_images", { paths, outputPath: output, direction });
 }
 
 // Compression & Conversion
 export async function smartCompress(input: string, output: string, quality: number, targetSizeKb?: number): Promise<ToolResult> {
+  if (!isTauri()) {
+    const ext = output.split('.').pop()?.toLowerCase() || 'jpg';
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.compress_image(bytes, ext, quality), "Compressed via WASM");
+  }
   return invoke<ToolResult>("smart_compress", { inputPath: input, outputPath: output, quality, targetSizeKb: targetSizeKb ?? null });
 }
 export async function convertFormat(input: string, output: string): Promise<ToolResult> {
+  if (!isTauri()) {
+    const ext = output.split('.').pop()?.toLowerCase() || 'png';
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.compress_image(bytes, ext, 100), "Format converted via WASM");
+  }
   return invoke<ToolResult>("convert_format", { inputPath: input, outputPath: output });
 }
 export async function convertHeic(input: string, output: string): Promise<ToolResult> {

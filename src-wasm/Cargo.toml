@@ -1,0 +1,18 @@
+[package]
+name = "tinytools-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+kamadak-exif = "0.5.5"
+img-parts = "0.4.0"
+image = { version = "0.24.8", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+ab_glyph = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+serde_json = "1.0"

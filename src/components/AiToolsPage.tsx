@@ -41,7 +41,7 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
   };
 
   return (
-    <ToolPage title="AI & Smart Tools" description="Local AI-powered image processing" onProcess={handleProcess} processLabel="Run AI Tool">
+    <ToolPage title="AI & Smart Tools" description="Local AI-powered image processing" onProcess={handleProcess} processLabel="Run AI Tool" allowWeb={true}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (

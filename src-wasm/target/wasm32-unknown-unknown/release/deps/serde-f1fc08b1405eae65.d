@@ -1,0 +1,14 @@
+/home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/deps/serde-f1fc08b1405eae65.d: /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/build/serde-fde142e50f4d8d9c/out/private.rs
+
+/home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/deps/libserde-f1fc08b1405eae65.rlib: /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/build/serde-fde142e50f4d8d9c/out/private.rs
+
+/home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/deps/libserde-f1fc08b1405eae65.rmeta: /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/build/serde-fde142e50f4d8d9c/out/private.rs
+
+/home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs:
+/home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs:
+/home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs:
+/home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs:
+/home/sagarr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs:
+/home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/build/serde-fde142e50f4d8d9c/out/private.rs:
+
+# env-dep:OUT_DIR=/home/sagarr/TinyTools/src-wasm/target/wasm32-unknown-unknown/release/build/serde-fde142e50f4d8d9c/out
