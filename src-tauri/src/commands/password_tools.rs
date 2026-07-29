@@ -296,6 +296,10 @@ pub struct PasswordRequest {
     pub custom_symbols: Option<String>,
     pub separator: Option<String>,
     pub pattern: Option<String>,
+    pub capitalize: Option<bool>,
+    pub append_digit: Option<bool>,
+    pub append_symbol: Option<bool>,
+    pub syllable_separator: Option<String>,
 }
 
 fn compute_entropy(length: usize, pool_size: usize) -> f64 {
@@ -374,8 +378,27 @@ fn generate_passphrase(req: &PasswordRequest) -> Result<GeneratedPassword, Strin
     let count = req.word_count.unwrap_or(4).max(2).min(12);
     let sep = req.separator.clone().unwrap_or_else(|| "-".to_string());
     let mut rng = OsRng;
-    let words: Vec<&str> = (0..count).map(|_| *WORD_LIST.choose(&mut rng).unwrap()).collect();
-    let password = words.join(&sep);
+    let words: Vec<String> = (0..count).map(|_| {
+        let w = *WORD_LIST.choose(&mut rng).unwrap();
+        if req.capitalize.unwrap_or(false) {
+            let mut c = w.to_string();
+            if let Some(first) = c.get_mut(0..1) {
+                first.make_ascii_uppercase();
+            }
+            c
+        } else {
+            w.to_string()
+        }
+    }).collect();
+    let mut password = words.join(&sep);
+    if req.append_digit.unwrap_or(false) {
+        let d = DIGITS[rng.gen_range(0..DIGITS.len())] as char;
+        password.push(d);
+    }
+    if req.append_symbol.unwrap_or(false) {
+        let s = SYMBOLS[rng.gen_range(0..SYMBOLS.len())] as char;
+        password.push(s);
+    }
     let entropy = compute_entropy(count, WORD_LIST.len());
     Ok(GeneratedPassword {
         password: password.clone(),
@@ -408,10 +431,14 @@ fn generate_pin(req: &PasswordRequest) -> Result<GeneratedPassword, String> {
 fn generate_pronounceable(req: &PasswordRequest) -> Result<GeneratedPassword, String> {
     let mut rng = OsRng;
     let syllables = req.length.unwrap_or(3).max(1).min(20);
+    let sep = req.syllable_separator.clone().unwrap_or_else(|| "-".to_string());
     let mut password = String::new();
     for i in 0..syllables {
-        if i > 0 { password.push('-'); }
-        let c = LOWERCASE[rng.gen_range(0..LOWERCASE.len())] as char;
+        if i > 0 { password.push_str(&sep); }
+        let mut c = LOWERCASE[rng.gen_range(0..LOWERCASE.len())] as char;
+        if req.capitalize.unwrap_or(false) {
+            c = c.to_ascii_uppercase();
+        }
         let v = b"aeiou"[rng.gen_range(0..5)] as char;
         let c2 = LOWERCASE[rng.gen_range(0..LOWERCASE.len())] as char;
         password.push(c);
@@ -421,7 +448,11 @@ fn generate_pronounceable(req: &PasswordRequest) -> Result<GeneratedPassword, St
     if req.digits.unwrap_or(true) {
         let d1 = DIGITS[rng.gen_range(0..DIGITS.len())] as char;
         let d2 = DIGITS[rng.gen_range(0..DIGITS.len())] as char;
-        password.push_str(&format!("-{}{}", d1, d2));
+        password.push_str(&format!("{}{}", if password.is_empty() { "" } else { &sep }, format!("{}{}", d1, d2)));
+    }
+    if req.append_symbol.unwrap_or(false) {
+        let s = SYMBOLS[rng.gen_range(0..SYMBOLS.len())] as char;
+        password.push(s);
     }
     let entropy = compute_entropy(syllables, 26 * 5 * 26);
     let len = password.len();
@@ -493,6 +524,10 @@ pub fn generate_bulk(req: PasswordRequest) -> Result<BulkResult, String> {
             custom_symbols: req.custom_symbols.clone(),
             separator: req.separator.clone(),
             pattern: req.pattern.clone(),
+            capitalize: req.capitalize,
+            append_digit: req.append_digit,
+            append_symbol: req.append_symbol,
+            syllable_separator: req.syllable_separator.clone(),
         })?);
     }
     let count = passwords.len();
@@ -534,6 +569,10 @@ mod tests {
             custom_symbols: None,
             separator: None,
             pattern: None,
+            capitalize: None,
+            append_digit: None,
+            append_symbol: None,
+            syllable_separator: None,
         };
         let result = generate_password(req).unwrap();
         assert_eq!(result.password.len(), 20);
@@ -556,6 +595,10 @@ mod tests {
             custom_symbols: None,
             separator: None,
             pattern: None,
+            capitalize: None,
+            append_digit: None,
+            append_symbol: None,
+            syllable_separator: None,
         };
         let result = generate_password(req).unwrap();
         assert_eq!(result.password.len(), 8);
@@ -578,6 +621,10 @@ mod tests {
             custom_symbols: None,
             separator: Some("-".to_string()),
             pattern: None,
+            capitalize: None,
+            append_digit: None,
+            append_symbol: None,
+            syllable_separator: None,
         };
         let result = generate_password(req).unwrap();
         let parts: Vec<&str> = result.password.split('-').collect();
@@ -602,6 +649,10 @@ mod tests {
             custom_symbols: None,
             separator: None,
             pattern: None,
+            capitalize: None,
+            append_digit: None,
+            append_symbol: None,
+            syllable_separator: None,
         };
         let result = generate_password(req).unwrap();
         assert!(result.password.len() > 10);
@@ -623,6 +674,10 @@ mod tests {
             custom_symbols: None,
             separator: None,
             pattern: Some("aaa-999".to_string()),
+            capitalize: None,
+            append_digit: None,
+            append_symbol: None,
+            syllable_separator: None,
         };
         let result = generate_password(req).unwrap();
         let parts: Vec<&str> = result.password.split('-').collect();
@@ -648,6 +703,10 @@ mod tests {
             custom_symbols: None,
             separator: None,
             pattern: None,
+            capitalize: None,
+            append_digit: None,
+            append_symbol: None,
+            syllable_separator: None,
         };
         let result = generate_bulk(req).unwrap();
         assert_eq!(result.count, 50);

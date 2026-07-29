@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Key, RefreshCw, Copy, Check, Download, Trash2, Shield, Hash, Volume2,
-  ChevronDown, ChevronUp, FileText, AlertTriangle, Zap, Dice5
+  Key, RefreshCw, Copy, Check, Download, Trash2, Shield,
+  ChevronDown, ChevronUp, FileText, AlertTriangle
 } from "lucide-react";
 import {
   generatePassword, generateBulkPasswords, exportPasswords,
@@ -13,19 +13,12 @@ const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
 type PwdMode = "random" | "passphrase" | "pin" | "pronounceable" | "pattern";
 
-interface ModeCard {
-  id: PwdMode;
-  icon: typeof Key;
-  title: string;
-  description: string;
-}
-
-const modes: ModeCard[] = [
-  { id: "random", icon: Key, title: "Random Password", description: "High-security random strings from customizable character sets" },
-  { id: "passphrase", icon: Dice5, title: "Memorable Passphrase", description: "Random dictionary words — easy to remember, hard to crack" },
-  { id: "pin", icon: Hash, title: "PIN Code", description: "Numeric-only strings for ATMs, devices, or keypads" },
-  { id: "pronounceable", icon: Volume2, title: "Pronounceable", description: "Alternating consonants and vowels — easy to speak aloud" },
-  { id: "pattern", icon: Zap, title: "Pattern / Template", description: "Custom format strings like AAA-999-aaa-!!!" },
+const modes: { id: PwdMode; label: string; description: string }[] = [
+  { id: "random", label: "Random Password", description: "High-security random strings from customizable character sets" },
+  { id: "passphrase", label: "Memorable Passphrase", description: "Random dictionary words — easy to remember, hard to crack" },
+  { id: "pin", label: "PIN Code", description: "Numeric-only strings for ATMs, devices, or keypads" },
+  { id: "pronounceable", label: "Pronounceable", description: "Alternating consonants and vowels — easy to speak aloud" },
+  { id: "pattern", label: "Pattern / Template", description: "Custom format strings like AAA-999-aaa-!!!" },
 ];
 
 const PRESETS: { label: string; length: number }[] = [
@@ -75,8 +68,18 @@ function strengthTextColor(label: string): string {
   }
 }
 
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!checked)}
+      className={`w-8 h-4 rounded-full transition-colors relative ${checked ? "bg-blue-500" : "bg-white/10"}`}>
+      <div className="w-3 h-3 rounded-full bg-white absolute top-0.5 transition-transform"
+        style={{ transform: checked ? "translateX(16px)" : "translateX(2px)" }} />
+    </button>
+  );
+}
+
 export default function PasswordGeneratorPage() {
-  const [mode, setMode] = useState<PwdMode | null>(null);
+  const [mode, setMode] = useState<PwdMode>("random");
   const [request, setRequest] = useState<PasswordRequest>({
     mode: "random",
     length: 16,
@@ -90,6 +93,10 @@ export default function PasswordGeneratorPage() {
     custom_symbols: "",
     separator: "-",
     pattern: "aaa-999-AAA",
+    capitalize: false,
+    append_digit: false,
+    append_symbol: false,
+    syllable_separator: "-",
   });
   const [single, setSingle] = useState<GeneratedPassword | null>(null);
   const [bulk, setBulk] = useState<BulkPasswordResult | null>(null);
@@ -104,11 +111,11 @@ export default function PasswordGeneratorPage() {
     setError("");
     try {
       if (mode === "pin" || (mode === "random" && bulk)) {
-        const r = await generateBulkPasswords({ ...request, mode: request.mode || mode });
+        const r = await generateBulkPasswords({ ...request, mode });
         setBulk(r);
         setSingle(null);
       } else {
-        const r = await generatePassword({ ...request, mode: mode || "random", count: undefined });
+        const r = await generatePassword({ ...request, mode, count: undefined });
         setSingle(r);
         setBulk(null);
       }
@@ -123,7 +130,7 @@ export default function PasswordGeneratorPage() {
     setLoading(true);
     setError("");
     try {
-      const r = await generatePassword({ ...request, mode: mode || "random", count: undefined });
+      const r = await generatePassword({ ...request, mode, count: undefined });
       setSingle(r);
       setBulk(null);
     } catch (e: unknown) {
@@ -134,12 +141,10 @@ export default function PasswordGeneratorPage() {
   }, [mode, request]);
 
   useEffect(() => {
-    if (mode) {
-      setRequest(r => ({ ...r, mode }));
-      setSingle(null);
-      setBulk(null);
-      setError("");
-    }
+    setRequest(r => ({ ...r, mode }));
+    setSingle(null);
+    setBulk(null);
+    setError("");
   }, [mode]);
 
   const copyPassword = async (text: string, idx?: number) => {
@@ -172,51 +177,27 @@ export default function PasswordGeneratorPage() {
     setCopied(false);
   };
 
-  // Mode selector
-  if (!mode) {
-    return (
-      <div className="flex flex-col h-full">
-        <h2 className="text-xl font-semibold mb-1">Password Generator</h2>
-        <p className="text-sm text-white/40 mb-6">Cryptographically secure passwords — 100% offline</p>
-        <div className="grid grid-cols-5 gap-3">
-          {modes.map(m => {
-            const Icon = m.icon;
-            return (
-              <motion.button key={m.id} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} transition={spring}
-                onClick={() => setMode(m.id)}
-                className="flex flex-col items-center gap-2 p-5 rounded-2xl border border-border bg-surface/50 hover:border-border-hover hover:bg-surface-hover transition-colors cursor-pointer">
-                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                  <Icon className="w-6 h-6 text-blue-400" />
-                </div>
-                <span className="text-sm font-medium text-center">{m.title}</span>
-                <span className="text-[10px] text-white/30 text-center leading-relaxed">{m.description}</span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  const modeCard = modes.find(m => m.id === mode)!;
-
   return (
     <div className="flex flex-col h-full gap-4">
-      <div className="flex items-center gap-3">
-        <button onClick={() => { setMode(null); setSingle(null); setBulk(null); setError(""); }}
-          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
-          <ChevronDown className="w-4 h-4 text-white/50 rotate-90" />
-        </button>
-        <div>
-          <h2 className="text-lg font-semibold">{modeCard.title}</h2>
-          <p className="text-xs text-white/40">{modeCard.description}</p>
-        </div>
+      <div>
+        <h2 className="text-xl font-semibold">Password Generator</h2>
+        <p className="text-sm text-white/40 mt-1">Cryptographically secure passwords — 100% offline</p>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
-        {/* Left: Controls */}
-        <div className="w-[320px] flex flex-col gap-3 overflow-y-auto pr-1">
-          {/* Mode-specific length controls */}
+        <div className="w-[340px] flex flex-col gap-3 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 gap-1.5">
+            {modes.map(m => (
+              <button key={m.id} onClick={() => setMode(m.id)}
+                className={`text-left px-3 py-2 rounded-lg text-xs transition-colors ${mode === m.id ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-white/5 text-white/50 border border-transparent hover:bg-white/10"}`}
+              >
+                <span className="font-medium">{m.label}</span>
+                {mode !== m.id && <span className="block text-[10px] text-white/30 mt-0.5">{m.description}</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* Length controls */}
           {(mode === "random" || mode === "pin") && (
             <div className="space-y-2">
               <label className="text-xs text-white/40 flex items-center justify-between">
@@ -257,6 +238,20 @@ export default function PasswordGeneratorPage() {
                   </button>
                 ))}
               </div>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center justify-between text-xs text-white/50">
+                  Capitalize Words
+                  <Toggle checked={request.capitalize ?? false} onChange={v => setRequest(r => ({ ...r, capitalize: v }))} />
+                </label>
+                <label className="flex items-center justify-between text-xs text-white/50">
+                  Append Digit
+                  <Toggle checked={request.append_digit ?? false} onChange={v => setRequest(r => ({ ...r, append_digit: v }))} />
+                </label>
+                <label className="flex items-center justify-between text-xs text-white/50">
+                  Append Symbol
+                  <Toggle checked={request.append_symbol ?? false} onChange={v => setRequest(r => ({ ...r, append_symbol: v }))} />
+                </label>
+              </div>
             </div>
           )}
 
@@ -269,6 +264,31 @@ export default function PasswordGeneratorPage() {
               <input type="range" min={1} max={20} value={request.length || 3}
                 onChange={e => setRequest(r => ({ ...r, length: Number(e.target.value) }))}
                 className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-400" />
+              <label className="text-xs text-white/40">Syllable Separator</label>
+              <div className="flex gap-1">
+                {["-", "_", " ", "."].map(s => (
+                  <button key={s} onClick={() => setRequest(r => ({ ...r, syllable_separator: s }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                      request.syllable_separator === s ? "bg-white/10 border-white/20 text-white" : "border-border text-white/40 hover:text-white/70"
+                    }`}>
+                    {s === " " ? "space" : s === "-" ? "dash" : s === "_" ? "underscore" : "dot"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center justify-between text-xs text-white/50">
+                  Append Digits
+                  <Toggle checked={request.digits ?? true} onChange={v => setRequest(r => ({ ...r, digits: v }))} />
+                </label>
+                <label className="flex items-center justify-between text-xs text-white/50">
+                  Capitalize First Letter
+                  <Toggle checked={request.capitalize ?? false} onChange={v => setRequest(r => ({ ...r, capitalize: v }))} />
+                </label>
+                <label className="flex items-center justify-between text-xs text-white/50">
+                  Append Symbol
+                  <Toggle checked={request.append_symbol ?? false} onChange={v => setRequest(r => ({ ...r, append_symbol: v }))} />
+                </label>
+              </div>
             </div>
           )}
 
@@ -471,15 +491,5 @@ export default function PasswordGeneratorPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button onClick={() => onChange(!checked)}
-      className={`w-8 h-4 rounded-full transition-colors relative ${checked ? "bg-blue-500" : "bg-white/10"}`}>
-      <div className="w-3 h-3 rounded-full bg-white absolute top-0.5 transition-transform"
-        style={{ transform: checked ? "translateX(16px)" : "translateX(2px)" }} />
-    </button>
   );
 }

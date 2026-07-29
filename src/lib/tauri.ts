@@ -199,6 +199,10 @@ export interface PasswordRequest {
   custom_symbols?: string;
   separator?: string;
   pattern?: string;
+  capitalize?: boolean;
+  append_digit?: boolean;
+  append_symbol?: boolean;
+  syllable_separator?: string;
 }
 
 export interface GeneratedPassword {
