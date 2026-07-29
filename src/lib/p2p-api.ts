@@ -15,6 +15,7 @@ export interface IncomingTransferInfo {
   sender_ip: string;
   encrypted: boolean;
   status: string;
+  save_path: string | null;
   created_at: number;
 }
 
@@ -44,6 +45,10 @@ export async function acceptTransfer(transferId: string, savePath: string): Prom
 
 export async function rejectTransfer(transferId: string): Promise<void> {
   return invoke<void>("reject_transfer", { transferId });
+}
+
+export async function revealInFolder(path: string): Promise<void> {
+  return invoke<void>("reveal_in_folder", { path });
 }
 
 export async function cleanupP2P(): Promise<void> {

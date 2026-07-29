@@ -41,6 +41,7 @@ pub struct IncomingTransferInfo {
     pub sender_ip: String,
     pub encrypted: bool,
     pub status: String,
+    pub save_path: Option<String>,
     pub created_at: u64,
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Globe, Download, Eye, EyeOff, FileDown,
+  Globe, Download, Eye, EyeOff, FileDown, FolderOpen,
 } from "lucide-react";
 import * as p2p from "../lib/p2p-api";
 import { saveFile, pickDirectory } from "../lib/tauri";
@@ -173,7 +173,7 @@ export default function P2PReceivePage() {
                       <span className="text-[10px] text-white/30 uppercase tracking-wider">
                         Uploaded Files ({fileList.length})
                       </span>
-                      {fileList.length > 1 && (
+                      {fileList.filter((t) => t.status !== "accepted").length > 1 && (
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -186,9 +186,7 @@ export default function P2PReceivePage() {
                         </motion.button>
                       )}
                     </div>
-                    {fileList
-                      .filter((t) => t.status !== "accepted")
-                      .map((t) => {
+                    {fileList.map((t) => {
                       const isDownloading = t.status === "ready" || t.status === "receiving";
                       const pct = t.file_size > 0 ? Math.round((t.received_bytes / t.file_size) * 100) : 0;
                       return (
@@ -207,7 +205,19 @@ export default function P2PReceivePage() {
                               {formatSize(t.file_size)} &middot; {t.sender_ip}
                             </p>
                           </div>
-                          {t.status === "announced" ? (
+                          {t.status === "accepted" ? (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[11px] text-green-400/80">Downloaded</span>
+                              <button
+                                onClick={() => p2p.revealInFolder(t.save_path!)
+                                  .catch(() => {})}
+                                className="p-1.5 rounded-lg bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors"
+                                title="Open in folder"
+                              >
+                                <FolderOpen className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : t.status === "announced" ? (
                             <motion.button
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}

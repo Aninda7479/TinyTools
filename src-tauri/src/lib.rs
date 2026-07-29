@@ -112,6 +112,7 @@ pub fn run() {
             p2p::commands::accept_transfer,
             p2p::commands::reject_transfer,
             p2p::commands::cleanup,
+            p2p::commands::reveal_in_folder,
             // Video Tools
             commands::video_tools::get_video_info,
             commands::video_tools::compress_video,

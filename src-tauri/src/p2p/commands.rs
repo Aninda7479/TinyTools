@@ -126,7 +126,7 @@ pub fn get_pending_transfers() -> Result<Vec<IncomingTransferInfo>, String> {
     let transfers = get_incoming_transfers().lock().map_err(|e| e.to_string())?;
     Ok(transfers
         .values()
-        .filter(|t| t.status == "announced" || t.status == "ready" || t.status == "receiving")
+        .filter(|t| t.status == "announced" || t.status == "ready" || t.status == "receiving" || t.status == "accepted")
         .map(|t| IncomingTransferInfo {
             id: t.id.clone(),
             file_name: t.file_name.clone(),
@@ -135,6 +135,7 @@ pub fn get_pending_transfers() -> Result<Vec<IncomingTransferInfo>, String> {
             sender_ip: t.sender_ip.clone(),
             encrypted: t.encrypted,
             status: t.status.clone(),
+            save_path: t.save_path.clone(),
             created_at: t.created_at,
         })
         .collect())
@@ -170,6 +171,15 @@ pub fn cleanup() -> Result<(), String> {
         state.server_port = None;
         state.server_runtime = None;
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reveal_in_folder(path: String) -> Result<(), String> {
+    let _ = std::process::Command::new("explorer")
+        .args(["/select,", &path])
+        .spawn()
+        .map_err(|e| format!("Failed to open folder: {}", e))?;
     Ok(())
 }
 
