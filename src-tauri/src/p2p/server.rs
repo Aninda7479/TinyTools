@@ -57,8 +57,8 @@ pub struct TransferManifest {
 }
 
 
-async fn portal_page() -> Html<&'static str> {
-    Html(
+async fn portal_page() -> Html<String> {
+    Html(format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,29 +66,34 @@ async fn portal_page() -> Html<&'static str> {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TinyTools - File Transfer</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.container{max-width:420px;width:100%;padding:2rem;text-align:center}
-h1{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}
-.subtitle{color:rgba(255,255,255,.4);font-size:.875rem;margin-bottom:2rem}
-.file-icon{width:80px;height:80px;border-radius:1.25rem;background:rgba(96,165,250,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem}
-.file-icon svg{width:40px;height:40px;color:rgba(96,165,250,.7)}
-.file-name{font-size:1rem;font-weight:500;margin-bottom:.25rem;word-break:break-all}
-.file-size{color:rgba(255,255,255,.4);font-size:.8rem;margin-bottom:2rem}
-.password-section{margin-bottom:1.5rem}
-.password-section input{width:100%;padding:.75rem 1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#fff;font-size:.875rem;outline:none;transition:border-color .2s}
-.password-section input:focus{border-color:rgba(96,165,250,.5)}
-.password-section p{color:rgba(255,255,255,.3);font-size:.75rem;margin-top:.5rem}
-.btn{width:100%;padding:.75rem;border-radius:.75rem;border:none;font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s}
-.btn-primary{background:rgba(96,165,250,.2);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
-.btn-primary:hover{background:rgba(96,165,250,.3)}
-.btn-primary:disabled{opacity:.4;cursor:not-allowed}
-.progress{display:none;margin-top:1.5rem}
-.progress-bar{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:.5rem}
-.progress-fill{height:100%;background:#60a5fa;border-radius:3px;transition:width .3s;width:0}
-.progress-text{font-size:.75rem;color:rgba(255,255,255,.4)}
-.error{color:#f87171;font-size:.8rem;margin-top:1rem;display:none}
-.success{color:#4ade80;font-size:.8rem;margin-top:1rem;display:none}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}}
+.container{{max-width:420px;width:100%;padding:2rem;text-align:center}}
+h1{{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}}
+.subtitle{{color:rgba(255,255,255,.4);font-size:.875rem;margin-bottom:2rem}}
+.file-icon{{width:80px;height:80px;border-radius:1.25rem;background:rgba(96,165,250,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem}}
+.file-icon svg{{width:40px;height:40px;color:rgba(96,165,250,.7)}}
+.file-name{{font-size:1rem;font-weight:500;margin-bottom:.25rem;word-break:break-all}}
+.file-size{{color:rgba(255,255,255,.4);font-size:.8rem;margin-bottom:1.5rem}}
+.password-section{{margin-bottom:1.5rem}}
+.password-section input{{width:100%;padding:.75rem 1rem;border-radius:.75rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#fff;font-size:.875rem;outline:none;transition:border-color .2s}}
+.password-section input:focus{{border-color:rgba(96,165,250,.5)}}
+.password-section p{{color:rgba(255,255,255,.3);font-size:.75rem;margin-top:.5rem}}
+.encrypted-badge{{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .75rem;border-radius:1rem;border:1px solid rgba(250,204,21,.3);background:rgba(250,204,21,.08);color:#facc15;font-size:.7rem;margin-bottom:1.5rem}}
+.encrypted-badge svg{{width:12px;height:12px}}
+.btn{{width:100%;padding:.75rem;border-radius:.75rem;border:none;font-size:.875rem;font-weight:500;cursor:pointer;transition:all .2s}}
+.btn-primary{{background:rgba(96,165,250,.2);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}}
+.btn-primary:hover{{background:rgba(96,165,250,.3)}}
+.btn-primary:disabled{{opacity:.4;cursor:not-allowed}}
+.btn-download{{background:rgba(74,222,128,.2);color:#4ade80;border:1px solid rgba(74,222,128,.3)}}
+.btn-download:hover{{background:rgba(74,222,128,.3)}}
+.progress{{display:none;margin-top:1.5rem}}
+.progress-bar{{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:.5rem}}
+.progress-fill{{height:100%;background:#4ade80;border-radius:3px;transition:width .3s;width:0}}
+.progress-text{{font-size:.75rem;color:rgba(255,255,255,.4)}}
+.error{{color:#f87171;font-size:.8rem;margin-top:1rem;display:none}}
+.success{{color:#4ade80;font-size:.8rem;margin-top:1rem;display:none}}
+.loading{{color:rgba(255,255,255,.3);font-size:.8rem;margin-top:1rem}}
 </style>
 </head>
 <body>
@@ -98,57 +103,30 @@ h1{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}
 <div class="file-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
 <div class="file-name" id="fileName">Loading...</div>
 <div class="file-size" id="fileSize"></div>
+<div class="encrypted-badge" id="encryptedBadge" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Encrypted</div>
 <div class="password-section" id="passwordSection" style="display:none">
 <input type="password" id="passwordInput" placeholder="Enter password to download">
 <p>This file is password-protected</p>
 </div>
-<button class="btn btn-primary" id="downloadBtn" onclick="startDownload()">Download File</button>
+<button class="btn btn-download" id="downloadBtn" onclick="startDownload()">Download File</button>
 <div class="progress" id="progressSection">
 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
 <div class="progress-text" id="progressText">0%</div>
 </div>
 <div class="error" id="errorText"></div>
 <div class="success" id="successText">Download complete!</div>
+<div class="loading" id="loadingIndicator">Loading file info...</div>
 </div>
 <script>
-const params=new URLSearchParams(window.location.search);
-const encrypted=params.get("encrypted")==="true";
-const fileName=decodeURIComponent(params.get("name")||"file");
-const fileSize=parseInt(params.get("size")||"0");
-document.getElementById("fileName").textContent=fileName;
-document.getElementById("fileSize").textContent=formatSize(fileSize);
-if(encrypted)document.getElementById("passwordSection").style.display="block";
-function formatSize(b){if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(2)+" GB"}
-async function startDownload(){
-const btn=document.getElementById("downloadBtn");
-btn.disabled=true;btn.textContent="Downloading...";
-document.getElementById("progressSection").style.display="block";
-try{
-const pwd=document.getElementById("passwordInput").value;
-const url="/api/download"+(pwd?"?password="+encodeURIComponent(pwd):"");
-const resp=await fetch(url);
-if(!resp.ok){const e=await resp.json();throw new Error(e.error||"Download failed")}
-const ct=resp.headers.get("content-length")||"0";
-const total=parseInt(ct);
-const reader=resp.body.getReader();
-const dec=new TextDecoder();
-let received=0;
-while(true){
-const{done,value}=await reader.read();
-if(done)break;
-received+=value.length;
-const pct=total>0?Math.round(received/total*100):0;
-document.getElementById("progressFill").style.width=pct+"%";
-document.getElementById("progressText").textContent=formatSize(received)+" / "+formatSize(total)+" ("+pct+"%)";
-const blob=new Blob([value]);
-const a=document.createElement("a");
-a.href=URL.createObjectURL(blob);
-a.download=fileName;
-if(done){document.getElementById("successText").style.display="block";btn.textContent="Downloaded"}}
-}catch(e){document.getElementById("errorText").textContent=e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry Download"}}
+let fileInfo={{}};
+async function init(){{
+try{{const r=await fetch("/api/info");if(!r.ok)throw new Error("No file available");fileInfo=await r.json();document.getElementById("loadingIndicator").style.display="none";document.getElementById("fileName").textContent=fileInfo.file_name;document.getElementById("fileSize").textContent=formatSize(fileInfo.file_size);if(fileInfo.password){{document.getElementById("passwordSection").style.display="block";document.getElementById("encryptedBadge").style.display="inline-flex"}}else{{document.getElementById("encryptedBadge").style.display="none"}}}}catch(e){{document.getElementById("loadingIndicator").textContent=e.message;document.getElementById("fileName").textContent="No file available";document.getElementById("downloadBtn").disabled=true}}}}
+function formatSize(b){{if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(2)+" GB"}}
+async function startDownload(){{const btn=document.getElementById("downloadBtn");btn.disabled=true;btn.textContent="Downloading...";document.getElementById("progressSection").style.display="block";document.getElementById("errorText").style.display="none";document.getElementById("successText").style.display="none";try{{const pwd=document.getElementById("passwordInput")?.value||"";const url=fileInfo.password?"/api/download?password="+encodeURIComponent(pwd):"/api/download";const resp=await fetch(url);if(!resp.ok){{const err=await resp.json().catch(()=>({{error:"Download failed"}}));throw new Error(err.error||resp.statusText||"Download failed")}}const ct=resp.headers.get("content-length")||"0";const total=parseInt(ct);const reader=resp.body.getReader();const chunks=[];let received=0;while(true){{const{{done,value}}=await reader.read();if(done)break;chunks.push(value);received+=value.length;if(total>0){{const pct=Math.round(received/total*100);document.getElementById("progressFill").style.width=pct+"%";document.getElementById("progressText").textContent=received>1024*1024?formatSize(received)+" / "+formatSize(total)+" ("+pct+"%)":pct+"%"}}}}const blob=new Blob(chunks);const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fileInfo.file_name;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);document.getElementById("successText").style.display="block";btn.textContent="Downloaded"}}catch(e){{document.getElementById("errorText").textContent=e.message;document.getElementById("errorText").style.display="block";btn.disabled=false;btn.textContent="Retry Download"}}}}
+init();
 </script>
 </body></html>"#,
-    )
+    ))
 }
 
 async fn get_portal_info(
