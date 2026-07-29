@@ -32,7 +32,7 @@ fn derive_key_pbkdf2(passphrase: &[u8], salt: &[u8]) -> Result<[u8; 32], String>
     use pbkdf2::pbkdf2_hmac;
     use sha2::Sha256;
     let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(passphrase, salt, 100_000, &mut key);
+    pbkdf2_hmac::<Sha256>(passphrase, salt, 600_000, &mut key);
     Ok(key)
 }
 
@@ -226,15 +226,36 @@ pub fn encrypt_vigenere(input: String, key: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn encrypt_xor(input: String, key: String) -> Result<String, String> {
+pub fn encrypt_xor(input: String, key: String, encoding: String) -> Result<String, String> {
     if key.is_empty() { return Err("XOR key cannot be empty".to_string()); }
     let key_bytes = key.as_bytes();
-    let out: String = input
+    let result: Vec<u8> = input
         .bytes()
         .enumerate()
-        .map(|(i, b)| (b ^ key_bytes[i % key_bytes.len()]) as char)
+        .map(|(i, b)| b ^ key_bytes[i % key_bytes.len()])
         .collect();
-    Ok(out)
+    match encoding.as_str() {
+        "hex" => Ok(hex::encode(&result)),
+        "base64" => Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &result)),
+        _ => String::from_utf8(result).map_err(|_| "XOR output is not valid UTF-8 — try hex/base64 encoding".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn decrypt_xor(input: String, key: String, encoding: String) -> Result<String, String> {
+    if key.is_empty() { return Err("XOR key cannot be empty".to_string()); }
+    let key_bytes = key.as_bytes();
+    let data: Vec<u8> = match encoding.as_str() {
+        "hex" => hex::decode(input.trim()).map_err(|e| format!("Hex decode error: {}", e))?,
+        "base64" => base64::Engine::decode(&base64::engine::general_purpose::STANDARD, input.trim()).map_err(|e| format!("Base64 decode error: {}", e))?,
+        _ => input.bytes().collect(),
+    };
+    let result: Vec<u8> = data
+        .iter()
+        .enumerate()
+        .map(|(i, b)| b ^ key_bytes[i % key_bytes.len()])
+        .collect();
+    String::from_utf8(result).map_err(|_| "Decrypted output is not valid UTF-8".to_string())
 }
 
 // ── File: AES-256-GCM ──────────────────────────────────────────

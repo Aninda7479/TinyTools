@@ -104,6 +104,7 @@ pub fn run() {
             commands::encryption::encrypt_caesar,
             commands::encryption::encrypt_vigenere,
             commands::encryption::encrypt_xor,
+            commands::encryption::decrypt_xor,
             commands::encryption::encrypt_file_aes,
             commands::encryption::decrypt_file_aes,
             commands::encryption::encrypt_file_chacha,

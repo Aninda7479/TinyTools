@@ -386,8 +386,11 @@ export async function encryptCaesar(input: string, shift: number): Promise<strin
 export async function encryptVigenere(input: string, key: string): Promise<string> {
   return invoke<string>("encrypt_vigenere", { input, key });
 }
-export async function encryptXor(input: string, key: string): Promise<string> {
-  return invoke<string>("encrypt_xor", { input, key });
+export async function encryptXor(input: string, key: string, encoding: string = "raw"): Promise<string> {
+  return invoke<string>("encrypt_xor", { input, key, encoding });
+}
+export async function decryptXor(input: string, key: string, encoding: string = "raw"): Promise<string> {
+  return invoke<string>("decrypt_xor", { input, key, encoding });
 }
 export async function encryptFileAes(inputPath: string, outputPath: string, passphrase: string, kdf: string = "argon2"): Promise<string> {
   return invoke<string>("encrypt_file_aes", { inputPath, outputPath, passphrase, kdf });
