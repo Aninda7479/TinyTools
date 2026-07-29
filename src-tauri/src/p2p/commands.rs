@@ -10,6 +10,7 @@ pub fn start_discovery() -> Result<PeerListResult, String> {
         transfers: std::collections::HashMap::new(),
         server_handle: None,
         server_port: None,
+        server_runtime: None,
         receiving: false,
     });
 
@@ -284,6 +285,7 @@ pub fn start_web_portal(
             }
             p2p.server_handle = Some(handle);
             p2p.server_port = Some(port);
+            p2p.server_runtime = Some(rt);
         }
     }
 
@@ -306,6 +308,7 @@ pub fn stop_web_portal() -> Result<(), String> {
             handle.abort();
         }
         state.server_port = None;
+        state.server_runtime = None;
     }
     Ok(())
 }
@@ -371,6 +374,7 @@ pub fn start_receiving() -> Result<(), String> {
         transfers: std::collections::HashMap::new(),
         server_handle: None,
         server_port: None,
+        server_runtime: None,
         receiving: false,
     });
     state.receiving = true;
@@ -400,6 +404,7 @@ pub fn cleanup() -> Result<(), String> {
             handle.abort();
         }
         state.server_port = None;
+        state.server_runtime = None;
         state.receiving = false;
     }
     Ok(())

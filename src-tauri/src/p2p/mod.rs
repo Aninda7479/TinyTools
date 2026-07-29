@@ -15,6 +15,7 @@ pub struct P2PState {
     pub transfers: HashMap<String, TransferState>,
     pub server_handle: Option<JoinHandle<()>>,
     pub server_port: Option<u16>,
+    pub server_runtime: Option<tokio::runtime::Runtime>,
     pub receiving: bool,
 }
 
@@ -74,6 +75,7 @@ pub fn init_state() {
             transfers: HashMap::new(),
             server_handle: None,
             server_port: None,
+            server_runtime: None,
             receiving: false,
         }))
     });
