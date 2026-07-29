@@ -172,7 +172,7 @@ export const sidebarCategories: SidebarCategory[] = [
     label: "Share",
     features: [
       { icon: Radio, title: "P2P Send", tag: "Network", tool: "p2p" },
-      { icon: QrCode, title: "Web Portal", tag: "Network", tool: "p2p" },
+      { icon: QrCode, title: "Local Web Portal", tag: "Network", tool: "p2p" },
       { icon: Lock, title: "Encrypted Transfer", tag: "Network", tool: "p2p" },
     ],
   },

@@ -129,7 +129,7 @@ export default function P2PPage() {
   const tabs: { id: Tab; icon: typeof Send; label: string }[] = [
     { id: "send", icon: Send, label: "Send" },
     { id: "receive", icon: Download, label: "Receive" },
-    { id: "portal", icon: Globe, label: "Web Portal" },
+    { id: "portal", icon: Globe, label: "Local Web Portal" },
   ];
 
   return (
@@ -137,7 +137,7 @@ export default function P2PPage() {
       <div>
         <h2 className="text-xl font-semibold">P2P File Sharing</h2>
         <p className="text-sm text-white/40 mt-1">
-          Send files to nearby devices or share via web portal — no server required
+          Send files to nearby devices or share via local web portal — no server required
         </p>
       </div>
 
@@ -263,7 +263,7 @@ export default function P2PPage() {
                   className="w-full py-2.5 rounded-xl bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-40 text-sm font-medium flex items-center justify-center gap-2"
                 >
                   <Globe className="w-4 h-4" />
-                  {loading ? "Starting..." : "Open Web Portal"}
+                  {loading ? "Starting..." : "Open Local Web Portal"}
                 </button>
               )}
 
@@ -274,7 +274,7 @@ export default function P2PPage() {
                   className="w-full py-2.5 rounded-xl bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-40 text-sm font-medium flex items-center justify-center gap-2"
                 >
                   <Globe className="w-4 h-4" />
-                  {loading ? "Starting..." : "Start Web Portal"}
+                  {loading ? "Starting..." : "Start Local Web Portal"}
                 </button>
               )}
             </>
@@ -287,7 +287,7 @@ export default function P2PPage() {
                 <p className="text-sm text-white/50 mb-1">Ready to Receive</p>
                 <p className="text-[10px] text-white/30">
                   Other TinyTools devices on your network can send files to this device.
-                  The web portal can also receive files from any browser.
+                  The local web portal can also receive files from any browser.
                 </p>
               </div>
               <div className="px-3 py-2 rounded-xl bg-white/5 border border-border">
@@ -396,9 +396,9 @@ export default function P2PPage() {
                 ) : (
                   <>
                     <Globe className="w-10 h-10 text-white/10" />
-                    <p className="text-sm text-white/50">No active web portal</p>
+                    <p className="text-sm text-white/50">No active local web portal</p>
                     <p className="text-[10px] text-white/30 text-center max-w-xs">
-                      Select a file and click "Start Web Portal" to generate a QR code.
+                      Select a file and click "Start Local Web Portal" to generate a QR code.
                       Anyone on the same Wi-Fi can download the file through their browser.
                     </p>
                   </>

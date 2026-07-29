@@ -31,7 +31,7 @@ export default function P2PWebPortal({
       <div className="w-full p-4 rounded-xl bg-white/5 border border-border">
         <div className="flex items-center gap-2 mb-3">
           <Globe className="w-4 h-4 text-blue-400" />
-          <span className="text-xs font-medium text-white/80">Web Portal Active</span>
+          <span className="text-xs font-medium text-white/80">Local Web Portal Active</span>
           <div className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
         </div>
 
