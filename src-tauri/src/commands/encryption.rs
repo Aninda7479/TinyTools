@@ -483,15 +483,35 @@ mod tests {
     fn test_xor_roundtrip() {
         let input = "secret message";
         let key = "key123";
-        let encrypted = encrypt_xor(input.to_string(), key.to_string()).unwrap();
-        let decrypted = encrypt_xor(encrypted, key.to_string()).unwrap();
+        let encrypted = encrypt_xor(input.to_string(), key.to_string(), "raw".to_string()).unwrap();
+        let decrypted = decrypt_xor(encrypted, key.to_string(), "raw".to_string()).unwrap();
         assert_eq!(decrypted, input);
     }
 
     #[test]
     fn test_xor_empty_key_fails() {
-        let result = encrypt_xor("test".to_string(), "".to_string());
+        let result = encrypt_xor("test".to_string(), "".to_string(), "raw".to_string());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_xor_hex_encoding() {
+        let input = "hello";
+        let key = "key";
+        let encrypted = encrypt_xor(input.to_string(), key.to_string(), "hex".to_string()).unwrap();
+        assert!(encrypted.chars().all(|c| c.is_ascii_hexdigit()));
+        let decrypted = decrypt_xor(encrypted, key.to_string(), "hex".to_string()).unwrap();
+        assert_eq!(decrypted, input);
+    }
+
+    #[test]
+    fn test_xor_base64_encoding() {
+        let input = "hello";
+        let key = "key";
+        let encrypted = encrypt_xor(input.to_string(), key.to_string(), "base64".to_string()).unwrap();
+        assert!(!encrypted.is_empty());
+        let decrypted = decrypt_xor(encrypted, key.to_string(), "base64".to_string()).unwrap();
+        assert_eq!(decrypted, input);
     }
 
     #[test]
