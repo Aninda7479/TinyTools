@@ -487,7 +487,8 @@ let wasmModule: any = null;
 async function loadWasm(): Promise<any> {
   if (wasmModule) return wasmModule;
   try {
-    wasmModule = await import('../lib/wasm');
+    // @ts-ignore - WASM module built separately with wasm-pack
+    wasmModule = await import('../../src-wasm/pkg');
     return wasmModule;
   } catch (e) {
     console.warn('WASM module not available:', e);
@@ -547,13 +548,8 @@ export async function wasmAddWatermark(
   const result = await wasm.wasm_add_watermark(input, output, text, opacity, position);
   return JSON.parse(result) as ToolResult;
 }
-
 // -- Metadata --
 export interface MetadataEntry {
   tag: string;
   value: string;
-}
-
-export async function readMetadata(inputPath: string): Promise<{ success: boolean; metadata: Record<string, string>; message: string }> {
-  return invoke(ead_metadata, { inputPath });
 }

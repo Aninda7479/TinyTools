@@ -19,6 +19,8 @@ export default function ToolPage({
   processLabel,
   multiFile = false,
   allowWeb = false,
+  onFilesChange,
+  previewNode,
 }: {
   title: string;
   description: string;
@@ -27,6 +29,8 @@ export default function ToolPage({
   processLabel?: string;
   multiFile?: boolean;
   allowWeb?: boolean;
+  onFilesChange?: (files: FileItem[]) => void;
+  previewNode?: React.ReactNode;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -36,8 +40,10 @@ export default function ToolPage({
     const picked = await pickFiles(filters);
     if (picked.length === 0) return;
     const newFiles = picked.map((f) => ({ name: f.name, path: f.path, size: f.size }));
-    setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
-  }, [multiFile]);
+    const updated = multiFile ? [...files, ...newFiles] : newFiles.slice(0, 1);
+    setFiles(updated);
+    onFilesChange?.(updated);
+  }, [multiFile, files, onFilesChange]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -113,25 +119,8 @@ export default function ToolPage({
               </>
             )}
           </motion.div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                <Upload className="w-8 h-8 text-white/30" />
-                <p className="text-sm text-white/60">
-                  Drop {multiFile ? "images" : "an image"} here or click to browse
-                </p>
-              </>
-            )}
-          </motion.div>
+
+          {previewNode}
 
           {files.length > 0 && (
             <motion.button
