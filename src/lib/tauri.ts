@@ -478,8 +478,14 @@ export async function extractFrames(input: string, outputDir: string, timestamp?
 
 // -- Tauri detection --
 export function isTauri(): boolean {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) return true;
-  return typeof import.meta !== 'undefined' && !!import.meta.env?.TAURI_TARGET_TRIPLE;
+  const w = window as any;
+  // __TAURI__ is only injected when withGlobalTauri=true; __TAURI_INTERNALS__
+  // (the IPC bridge) is always present inside the Tauri webview.
+  return typeof window !== 'undefined' && !!(
+    w.__TAURI__ ||
+    w.__TAURI_INTERNALS__ ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.TAURI_TARGET_TRIPLE)
+  );
 }
 
 // -- WASM fallback --
