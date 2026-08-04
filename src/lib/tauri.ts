@@ -478,7 +478,8 @@ export async function extractFrames(input: string, outputDir: string, timestamp?
 
 // -- Tauri detection --
 export function isTauri(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__TAURI__;
+  if (typeof window !== 'undefined' && (window as any).__TAURI__) return true;
+  return typeof import.meta !== 'undefined' && !!import.meta.env?.TAURI_TARGET_TRIPLE;
 }
 
 // -- WASM fallback --
