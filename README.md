@@ -95,6 +95,20 @@ TinyTools/
 
 Heavy lifting runs in Rust with `rayon` for parallel processing. Frontend communicates via Tauri IPC — no HTTP overhead, no server process.
 
+## Homelab Mode (`--serve`)
+
+Run TinyTools as a headless HTTPS web server (no desktop window) to power the Global Share / P2P portal over your LAN.
+
+```bash
+npm run build              # build frontend → dist/
+cd src-tauri && cargo build --release   # build binary
+./target/release/tinytools --serve
+```
+
+Alternatively: `TINYTOOLS_HOMELAB=1 ./target/release/tinytools`
+
+See [docs/serve.md](docs/serve.md) for full details including development mode.
+
 ## Contributing
 
 1. Fork the repo
