@@ -171,36 +171,6 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
         ))}
       </div>
 
-      {selectedTool === "strip-metadata" && metadata && Object.keys(metadata).length > 0 && (
-        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2 max-h-64 overflow-y-auto">
-          <p className="text-xs text-white/60 mb-1 flex justify-between">
-            <span>EXIF Data Found:</span>
-            <span className="text-red-400">{Object.keys(metadata).length} tags</span>
-          </p>
-          {Object.entries(metadata).map(([k, v]) => {
-            const isSensitive = k.toLowerCase().includes("gps") || k.toLowerCase().includes("author") || k.toLowerCase().includes("location");
-            return (
-              <div key={k} className="flex justify-between items-center text-[10px] gap-2 border-b border-white/5 pb-1">
-                <span className={`truncate flex-1 ${isSensitive ? "text-red-300" : "text-white/40"}`}>{k}</span>
-                <span className="text-white/80 truncate flex-1 text-right">{v}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {selectedTool === "strip-metadata" && metadata && Object.keys(metadata).length === 0 && (
-        <div className="mt-2 p-3 rounded-xl border border-green-500/20 bg-green-500/10 flex flex-col items-center justify-center py-6 text-center">
-          <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center mb-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-green-400"><path d="M20 6 9 17l-5-5"/></svg>
-          </div>
-          <p className="text-sm font-medium text-green-400">Image is Clean!</p>
-          <p className="text-xs text-green-400/60 mt-1 max-w-[200px]">
-            No sensitive metadata found. This image is already safe to share.
-          </p>
-        </div>
-      )}
-
       {selectedTool === "redact" && (
         <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2">
           <OptionRow label="Method">

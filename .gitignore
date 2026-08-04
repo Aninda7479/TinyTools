@@ -4,6 +4,7 @@ target/
 src-tauri/target/
 src-tauri/gen/
 src-wasm/target/
+src-wasm/pkg/
 crates/image-core/target/
 *.log
 .DS_Store
