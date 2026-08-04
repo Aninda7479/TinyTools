@@ -1,10 +1,11 @@
-use image::{codecs::jpeg::JpegEncoder, DynamicImage};
+use image_core::{
+    convert_format as core_convert, convert_heic as core_heic, raster_to_svg as core_raster_svg,
+    compress_image as core_compress,
+};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::io::Cursor;
 use std::path::PathBuf;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ToolResult {
     pub success: bool,
     pub output_path: Option<String>,
@@ -18,18 +19,15 @@ pub fn smart_compress(
     target_size_kb: Option<u32>,
     quality: u8,
 ) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let ext = get_extension(&output_path);
-
     if let Some(target) = target_size_kb {
-        // Binary search for quality that hits target size
         let mut low = 10u8;
         let mut high = 100u8;
         let mut best_quality = quality;
+        let ext = get_extension(&output_path);
 
         for _ in 0..8 {
             let mid = (low + high) / 2;
-            let size = estimate_size(&img, mid, &ext)?;
+            let size = estimate_size(&input_path, mid, &ext)?;
             if size > target as u64 * 1024 {
                 high = mid;
             } else {
@@ -37,123 +35,65 @@ pub fn smart_compress(
                 best_quality = mid;
             }
         }
-        compress_with_quality(&img, best_quality, &ext, &output_path)?;
+        let result = core_compress(input_path, output_path, best_quality)?;
         Ok(ToolResult {
-            success: true,
-            output_path: Some(output_path),
+            success: result.success,
+            output_path: result.output_path,
             message: format!("Compressed to ~{}KB (q={})", target, best_quality),
         })
     } else {
-        compress_with_quality(&img, quality, &ext, &output_path)?;
+        let result = core_compress(input_path, output_path, quality)?;
         Ok(ToolResult {
-            success: true,
-            output_path: Some(output_path),
-            message: format!("Compressed with quality {}", quality),
+            success: result.success,
+            output_path: result.output_path,
+            message: result.message,
         })
-    }
-}
-
-fn compress_with_quality(img: &DynamicImage, quality: u8, ext: &str, path: &str) -> Result<(), String> {
-    match ext {
-        "jpg" | "jpeg" => {
-            let rgb = img.to_rgb8();
-            let mut buf = Cursor::new(Vec::new());
-            let encoder = JpegEncoder::new_with_quality(&mut buf, quality);
-            rgb.write_with_encoder(encoder).map_err(|e| e.to_string())?;
-            fs::write(path, buf.into_inner()).map_err(|e| e.to_string())?;
-        }
-        _ => {
-            img.save(path).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-fn estimate_size(img: &DynamicImage, quality: u8, ext: &str) -> Result<u64, String> {
-    match ext {
-        "jpg" | "jpeg" => {
-            let rgb = img.to_rgb8();
-            let mut buf = Cursor::new(Vec::new());
-            let encoder = JpegEncoder::new_with_quality(&mut buf, quality);
-            rgb.write_with_encoder(encoder).map_err(|e| e.to_string())?;
-            Ok(buf.into_inner().len() as u64)
-        }
-        _ => {
-            let mut buf = Cursor::new(Vec::new());
-            img.write_to(&mut buf, image::ImageFormat::Png).map_err(|e| e.to_string())?;
-            Ok(buf.into_inner().len() as u64)
-        }
     }
 }
 
 #[tauri::command]
-pub fn convert_format(
-    input_path: String,
-    output_path: String,
-) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let ext = get_extension(&output_path).to_uppercase();
-    img.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult {
-        success: true,
-        output_path: Some(output_path),
-        message: format!("Converted to {}", ext),
+pub fn convert_format(input_path: String, output_path: String) -> Result<ToolResult, String> {
+    core_convert(input_path, output_path).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
     })
 }
 
 #[tauri::command]
 pub fn convert_heic(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    // HEIC support depends on system libraries; attempt via image crate
-    match image::open(&input_path) {
-        Ok(img) => {
-            img.save(&output_path).map_err(|e| format!("HEIC decoding not supported on this system: {}", e))?;
-            Ok(ToolResult { success: true, output_path: Some(output_path), message: "HEIC converted".into() })
-        }
-        Err(e) => Err(format!("HEIC decoding failed: {}. Install libheif on your system.", e)),
-    }
+    core_heic(input_path, output_path).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }
 
 #[tauri::command]
 pub fn raster_to_svg(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let gray = img.grayscale().to_luma8();
-    let (w, h) = gray.dimensions();
+    core_raster_svg(input_path, output_path).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
+}
 
-    // Simple potrace-like: threshold + generate SVG paths
-    let threshold = 128u8;
-    let mut svg = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">"#,
-        w, h, w, h
-    );
-    svg.push_str(r#"<rect width="100%" height="100%" fill="white"/>"#);
-
-    // Find contours by scanning rows
-    for y in 0..h {
-        let mut in_path = false;
-        let mut path_d = String::new();
-        for x in 0..=w {
-            let dark = if x < w {
-                gray.get_pixel(x, y).0[0] < threshold
-            } else {
-                false
-            };
-            if dark && !in_path {
-                path_d = format!("M{},{}", x, y);
-                in_path = true;
-            } else if !dark && in_path {
-                path_d.push_str(&format!("L{},{}Z", x, y));
-                svg.push_str(&format!(
-                    r#"<path d="{}" fill="black"/>"#,
-                    path_d
-                ));
-                in_path = false;
-            }
+fn estimate_size(input_path: &str, quality: u8, ext: &str) -> Result<u64, String> {
+    let img = image::open(input_path).map_err(|e| e.to_string())?;
+    match ext {
+        "jpg" | "jpeg" => {
+            let rgb = img.to_rgb8();
+            let mut buf = std::io::Cursor::new(Vec::new());
+            let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality);
+            rgb.write_with_encoder(encoder).map_err(|e| e.to_string())?;
+            Ok(buf.into_inner().len() as u64)
+        }
+        _ => {
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+            Ok(buf.into_inner().len() as u64)
         }
     }
-
-    svg.push_str("</svg>");
-    fs::write(&output_path, svg).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Vectorized to SVG".into() })
 }
 
 fn get_extension(path: &str) -> String {
