@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Sidebar, { type Tool, sidebarCategories } from "./components/Sidebar";
 import CategoryPage from "./components/CategoryPage";
@@ -35,6 +35,18 @@ function AppInner() {
     setActiveTool(tool);
     setActiveSub(sub);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        handleNavigate("welcome");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const renderTool = () => {
     if (catToolIds.has(activeTool)) {
