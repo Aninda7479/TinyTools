@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Upload, X, Play } from "lucide-react";
 import { pickFiles } from "../lib/tauri";
@@ -18,6 +18,7 @@ export default function ToolPage({
   onProcess,
   processLabel,
   multiFile = false,
+  renderPreview,
 }: {
   title: string;
   description: string;
@@ -25,17 +26,40 @@ export default function ToolPage({
   onProcess: (files: FileItem[]) => void;
   processLabel?: string;
   multiFile?: boolean;
+  renderPreview?: (file: FileItem) => React.ReactNode;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openPicker = useCallback(async () => {
-    const filters = [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic"] }];
-    const picked = await pickFiles(filters);
-    if (picked.length === 0) return;
-    const newFiles = picked.map((f) => ({ name: f.name, path: f.path, size: f.size }));
-    setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
+    try {
+      if ((window as any).__TAURI_INTERNALS__) {
+        const filters = [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic"] }];
+        const picked = await pickFiles(filters);
+        if (picked.length === 0) return;
+        const newFiles = picked.map((f) => ({ name: f.name, path: f.path, size: f.size }));
+        setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
+      } else {
+        fileInputRef.current?.click();
+      }
+    } catch {
+      fileInputRef.current?.click();
+    }
   }, [multiFile]);
+
+  const handleWebFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const picked = Array.from(e.target.files);
+    if (picked.length === 0) return;
+    const newFiles = picked.map(f => ({
+      name: f.name,
+      path: URL.createObjectURL(f), // Use ObjectURL as path for web
+      size: f.size
+    }));
+    setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
+    e.target.value = "";
+  };
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -71,20 +95,32 @@ export default function ToolPage({
             className="border-2 border-dashed rounded-2xl p-8 flex flex-col items-center gap-3 cursor-pointer hover:border-white/20 transition-colors min-h-[200px]"
             onClick={openPicker}
           >
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              multiple={multiFile}
+              accept="image/*"
+              onChange={handleWebFileSelect}
+            />
             {files.length > 0 ? (
-              <div className={`flex gap-3 flex-wrap ${multiFile ? "" : ""}`}>
+              <div className={`flex gap-3 flex-wrap w-full ${multiFile ? "" : ""}`}>
                 {files.map((f, i) => (
-                  <div key={i} className="relative group flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
-                      {f.name}
-                    </div>
+                  <div key={i} className={`relative group flex flex-col items-center ${renderPreview ? 'w-full h-full' : ''}`}>
+                    {renderPreview ? (
+                      renderPreview(f)
+                    ) : (
+                      <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
+                        {f.name}
+                      </div>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-1 -right-1 w-5 h-5 z-10 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X className="w-3 h-3" />
                     </button>
-                    <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>
+                    {!renderPreview && <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>}
                   </div>
                 ))}
               </div>
