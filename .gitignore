@@ -1,7 +1,10 @@
 node_modules/
 dist/
+target/
 src-tauri/target/
 src-tauri/gen/
+src-wasm/target/
+crates/image-core/target/
 *.log
 .DS_Store
 Thumbs.db

@@ -475,3 +475,85 @@ export async function burnSubtitles(input: string, subtitlePath: string): Promis
 export async function extractFrames(input: string, outputDir: string, timestamp?: number): Promise<ToolResult> {
   return invoke<ToolResult>("extract_frames", { input, outputDir, timestamp: timestamp ?? null });
 }
+
+// -- Tauri detection --
+export function isTauri(): boolean {
+  return typeof window !== 'undefined' && !!(window as any).__TAURI__;
+}
+
+// -- WASM fallback --
+let wasmModule: any = null;
+
+async function loadWasm(): Promise<any> {
+  if (wasmModule) return wasmModule;
+  try {
+    wasmModule = await import('../lib/wasm');
+    return wasmModule;
+  } catch (e) {
+    console.warn('WASM module not available:', e);
+    return null;
+  }
+}
+
+export async function wasmProcessImage(
+  input: string,
+  output: string,
+  operation: string,
+  params?: Record<string, unknown>,
+): Promise<ToolResult> {
+  const wasm = await loadWasm();
+  if (!wasm) throw new Error('WASM module not available');
+  const paramsJson = params ? JSON.stringify(params) : null;
+  const result = await wasm.wasm_process_image(input, output, operation, paramsJson);
+  return JSON.parse(result) as ToolResult;
+}
+
+export async function wasmRemoveBackground(input: string, output: string): Promise<ToolResult> {
+  const wasm = await loadWasm();
+  if (!wasm) throw new Error('WASM module not available');
+  const result = await wasm.wasm_remove_background(input, output);
+  return JSON.parse(result) as ToolResult;
+}
+
+export async function wasmStripMetadata(input: string, output: string): Promise<ToolResult> {
+  const wasm = await loadWasm();
+  if (!wasm) throw new Error('WASM module not available');
+  const result = await wasm.wasm_strip_metadata(input, output);
+  return JSON.parse(result) as ToolResult;
+}
+
+export async function wasmRedactRegions(
+  input: string,
+  output: string,
+  regions: [number, number, number, number][],
+  method: string,
+): Promise<ToolResult> {
+  const wasm = await loadWasm();
+  if (!wasm) throw new Error('WASM module not available');
+  const regionsJson = JSON.stringify(regions);
+  const result = await wasm.wasm_redact_regions(input, output, regionsJson, method);
+  return JSON.parse(result) as ToolResult;
+}
+
+export async function wasmAddWatermark(
+  input: string,
+  output: string,
+  text: string,
+  opacity: number,
+  position: string,
+): Promise<ToolResult> {
+  const wasm = await loadWasm();
+  if (!wasm) throw new Error('WASM module not available');
+  const result = await wasm.wasm_add_watermark(input, output, text, opacity, position);
+  return JSON.parse(result) as ToolResult;
+}
+
+// -- Metadata --
+export interface MetadataEntry {
+  tag: string;
+  value: string;
+}
+
+export async function readMetadata(inputPath: string): Promise<{ success: boolean; metadata: Record<string, string>; message: string }> {
+  return invoke(ead_metadata, { inputPath });
+}

@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Upload, X, Play } from "lucide-react";
-import { pickFiles } from "../lib/tauri";
+import { MonitorDown, Upload, X, Play } from "lucide-react";
+import { isTauri, pickFiles } from "../lib/tauri";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -18,6 +18,7 @@ export default function ToolPage({
   onProcess,
   processLabel,
   multiFile = false,
+  allowWeb = false,
 }: {
   title: string;
   description: string;
@@ -25,6 +26,7 @@ export default function ToolPage({
   onProcess: (files: FileItem[]) => void;
   processLabel?: string;
   multiFile?: boolean;
+  allowWeb?: boolean;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -46,6 +48,8 @@ export default function ToolPage({
     [openPicker]
   );
 
+  const webBlocked = !isTauri() && !allowWeb;
+
   return (
     <div className="flex flex-col h-full gap-4">
       <div>
@@ -53,7 +57,19 @@ export default function ToolPage({
         <p className="text-sm text-white/40 mt-1">{description}</p>
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
+      {webBlocked && (
+        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-2xl border border-red-500/20 p-8 text-center">
+          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+            <MonitorDown className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Desktop App Required</h2>
+          <p className="text-sm text-white/60 max-w-md">
+            This tool requires the TinyTools native Rust backend to process files securely and efficiently. Please use the Desktop app to access this feature.
+          </p>
+        </div>
+      )}
+
+      <div className={`flex gap-4 flex-1 min-h-0 ${webBlocked ? "opacity-20 pointer-events-none select-none" : ""}`}>
         {/* Left: Options */}
         <div className="w-[340px] flex flex-col gap-3 overflow-y-auto pr-1">{children}</div>
 
@@ -78,6 +94,25 @@ export default function ToolPage({
                     <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
                       {f.name}
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 text-white/30" />
+                <p className="text-sm text-white/60">
+                  Drop {multiFile ? "images" : "an image"} here or click to browse
+                </p>
+              </>
+            )}
+          </motion.div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
                       className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"

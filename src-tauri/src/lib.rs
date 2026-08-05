@@ -141,3 +141,48 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running TinyTools");
 }
+
+pub fn run_homelab() {
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+    rt.block_on(async {
+        let local_ip = local_ip_address::local_ip()
+            .map(|ip| ip.to_string())
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+
+        let (port, handle) = match p2p::server::start_homelab_server(&local_ip).await {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("Failed to start homelab server: {}", e);
+                return;
+            }
+        };
+
+        let url = format!("https://{}:{}", local_ip, port);
+        println!("\n========================================");
+        println!("  TinyTools Homelab Mode");
+        println!("  URL: {}", url);
+        println!("  LAN: https://{}:{}", local_ip, port);
+        println!("  Press Ctrl+C to stop");
+        println!("========================================\n");
+
+        if let Ok(qr) = generate_homelab_qr(&url) {
+            println!("QR Code (scan with phone camera):\n");
+            println!("{}", qr);
+            println!();
+        }
+
+        let _ = handle.await;
+    });
+}
+
+fn generate_homelab_qr(url: &str) -> Result<String, String> {
+    use qrcode::QrCode;
+    use qrcode::render::unicode;
+
+    let code = QrCode::new(url.as_bytes()).map_err(|e| e.to_string())?;
+    let image = code
+        .render::<unicode::Dense1x2>()
+        .build();
+
+    Ok(image)
+}
