@@ -10,6 +10,7 @@ import {
   Image as ImageIcon, Subtitles, Download,
 } from "lucide-react";
 import type { Tool } from "./Sidebar";
+import { searchFeatures } from "../lib/search";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -163,19 +164,7 @@ export default function Welcome({ onNavigate }: { onNavigate: (tool: Tool, sub?:
   const [query, setQuery] = useState("");
 
   const filteredSections = useMemo(() => {
-    if (!query.trim()) return sections;
-    const q = query.toLowerCase();
-    return sections
-      .map((section) => ({
-        ...section,
-        features: section.features.filter(
-          (f) =>
-            f.title.toLowerCase().includes(q) ||
-            f.tag.toLowerCase().includes(q) ||
-            f.keywords.includes(q)
-        ),
-      }))
-      .filter((section) => section.features.length > 0);
+    return searchFeatures(query, sections);
   }, [query]);
 
   return (
