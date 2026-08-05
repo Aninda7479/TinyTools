@@ -2,6 +2,7 @@ use image_core::{
     add_image_watermark, add_watermark, compress_image, convert_format, convert_heic,
     depth_blur, expand_canvas, flip_image, grayscale, inpaint_image, process_image,
     raster_to_svg, redact_regions, remove_background, rotate_image, sharpen_image,
+    blur_image, resize_image,
     sepia_filter, smart_crop, smart_sharpen, split_image, stitch_images, strip_metadata,
     upscale_image, ToolResult,
 };
