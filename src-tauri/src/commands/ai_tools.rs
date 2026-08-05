@@ -1,7 +1,10 @@
-use image::{GenericImageView, Rgba, RgbaImage};
+use image_core::{
+    depth_blur as core_depth_blur, inpaint_image as core_inpaint, remove_background as core_remove_bg,
+    sepia_filter as core_sepia, smart_sharpen as core_sharpen, upscale_image as core_upscale,
+};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ToolResult {
     pub success: bool,
     pub output_path: Option<String>,
@@ -10,177 +13,11 @@ pub struct ToolResult {
 
 #[tauri::command]
 pub fn remove_background(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut out = RgbaImage::new(w, h);
-
-    // ── Step 1: Sample background color from all edges ──
-    let mut bg_r: Vec<u8> = Vec::new();
-    let mut bg_g: Vec<u8> = Vec::new();
-    let mut bg_b: Vec<u8> = Vec::new();
-
-    let border = 8u32;
-    for x in 0..w {
-        for d in 0..border {
-            if d >= h { break; }
-            let pt = *rgba.get_pixel(x, d);
-            bg_r.push(pt[0]); bg_g.push(pt[1]); bg_b.push(pt[2]);
-            let pb = *rgba.get_pixel(x, h - 1 - d);
-            bg_r.push(pb[0]); bg_g.push(pb[1]); bg_b.push(pb[2]);
-        }
-    }
-    for y in 0..h {
-        for d in 0..border {
-            if d >= w { break; }
-            let pl = *rgba.get_pixel(d, y);
-            bg_r.push(pl[0]); bg_g.push(pl[1]); bg_b.push(pl[2]);
-            let pr = *rgba.get_pixel(w - 1 - d, y);
-            bg_r.push(pr[0]); bg_g.push(pr[1]); bg_b.push(pr[2]);
-        }
-    }
-
-    bg_r.sort_unstable();
-    bg_g.sort_unstable();
-    bg_b.sort_unstable();
-    let mid = bg_r.len() / 2;
-    let bg_color = [bg_r[mid], bg_g[mid], bg_b[mid]];
-
-    // ── Step 2: Compute per-pixel distance to background ──
-    let total_px = (w * h) as usize;
-    let mut dist_map: Vec<f64> = Vec::with_capacity(total_px);
-    let mut max_dist: f64 = 0.0;
-
-    for y in 0..h {
-        for x in 0..w {
-            let p = *rgba.get_pixel(x, y);
-            let d = perceptual_dist(p, bg_color);
-            dist_map.push(d);
-            if d > max_dist { max_dist = d; }
-        }
-    }
-    if max_dist < 1.0 { max_dist = 1.0; }
-
-    // ── Step 3: Find threshold using percentile + Otsu ──
-    let mut sorted_dists = dist_map.clone();
-    sorted_dists.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-
-    let bg_pct = 0.60;
-    let thresh_idx = (total_px as f64 * bg_pct).min(total_px as f64 - 1.0) as usize;
-    let percentile_thresh = sorted_dists[thresh_idx];
-
-    // Also compute Otsu for comparison
-    let bins = 256usize;
-    let mut hist = vec![0u32; bins];
-    for &d in &dist_map {
-        let bin = ((d / max_dist) * (bins as f64 - 1.0)) as usize;
-        hist[bin] += 1;
-    }
-    let total_f = total_px as f64;
-    let mut sum_all: f64 = 0.0;
-    for i in 0..bins { sum_all += i as f64 * hist[i] as f64; }
-    let mut sum_bg: f64 = 0.0;
-    let mut w_bg: f64 = 0.0;
-    let mut best_otsu = 0usize;
-    let mut best_var: f64 = 0.0;
-    for i in 0..bins {
-        w_bg += hist[i] as f64;
-        if w_bg < 1.0 { continue; }
-        let w_fg = total_f - w_bg;
-        if w_fg < 1.0 { break; }
-        sum_bg += i as f64 * hist[i] as f64;
-        let mean_bg = sum_bg / w_bg;
-        let mean_fg = (sum_all - sum_bg) / w_fg;
-        let variance = w_bg * w_fg * (mean_bg - mean_fg).powi(2);
-        if variance > best_var {
-            best_var = variance;
-            best_otsu = i;
-        }
-    }
-    let otsu_thresh = best_otsu as f64 / (bins as f64 - 1.0) * max_dist;
-
-    let threshold = percentile_thresh.max(otsu_thresh).max(max_dist * 0.02);
-    let transition_half = max_dist * 0.12;
-
-    // ── Step 4: Generate alpha mask directly from distance map ──
-    for y in 0..h {
-        for x in 0..w {
-            let i = (y * w + x) as usize;
-            let pixel = *rgba.get_pixel(x, y);
-            let d = dist_map[i];
-
-            let alpha = if d >= threshold + transition_half {
-                255u8
-            } else if d <= threshold - transition_half {
-                0u8
-            } else {
-                let t = ((d - (threshold - transition_half)) / (2.0 * transition_half)).clamp(0.0, 1.0);
-                let t = t * t * (3.0 - 2.0 * t);
-                (t * 255.0) as u8
-            };
-
-            out.put_pixel(x, y, Rgba([pixel[0], pixel[1], pixel[2], alpha]));
-        }
-    }
-
-    // ── Step 5: Edge cleanup — remove isolated foreground specks ──
-    for y in 1..h-1 {
-        for x in 1..w-1 {
-            let alpha = out.get_pixel(x, y)[3];
-            if alpha > 128 {
-                let mut transparent = 0;
-                for dy in -1i32..=1 {
-                    for dx in -1i32..=1 {
-                        if dx == 0 && dy == 0 { continue; }
-                        let nx = (x as i32 + dx) as u32;
-                        let ny = (y as i32 + dy) as u32;
-                        if out.get_pixel(nx, ny)[3] < 128 { transparent += 1; }
-                    }
-                }
-                if transparent >= 6 {
-                    out.put_pixel(x, y, Rgba([0, 0, 0, 0]));
-                }
-            }
-        }
-    }
-
-    // ── Step 6: Fill isolated background holes ──
-    for y in 1..h-1 {
-        for x in 1..w-1 {
-            let alpha = out.get_pixel(x, y)[3];
-            if alpha < 128 {
-                let mut opaque = 0;
-                for dy in -1i32..=1 {
-                    for dx in -1i32..=1 {
-                        if dx == 0 && dy == 0 { continue; }
-                        let nx = (x as i32 + dx) as u32;
-                        let ny = (y as i32 + dy) as u32;
-                        if out.get_pixel(nx, ny)[3] > 128 { opaque += 1; }
-                    }
-                }
-                if opaque >= 6 {
-                    let pixel = *rgba.get_pixel(x, y);
-                    out.put_pixel(x, y, Rgba([pixel[0], pixel[1], pixel[2], 255]));
-                }
-            }
-        }
-    }
-
-    out.save(&output_path).map_err(|e| e.to_string())?;
-
-    let fg_pixels = dist_map.iter().filter(|d| **d > threshold + transition_half).count();
-    let pct = (fg_pixels as f64 / total_px as f64 * 100.0) as u32;
-    let msg = format!("Background removed — {}% foreground (bg: [{},{},{}], thresh: {:.1}, otsu: {:.1})",
-        pct, bg_color[0], bg_color[1], bg_color[2], threshold, otsu_thresh);
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: msg })
-}
-
-fn perceptual_dist(p: Rgba<u8>, bg: [u8; 3]) -> f64 {
-    // Weighted Euclidean (Rec. 709 luminance weighting)
-    let dr = p[0] as f64 - bg[0] as f64;
-    let dg = p[1] as f64 - bg[1] as f64;
-    let db = p[2] as f64 - bg[2] as f64;
-    (0.299 * dr * dr + 0.587 * dg * dg + 0.114 * db * db).sqrt()
+    core_remove_bg(input_path, output_path).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }
 
 #[tauri::command]
@@ -189,330 +26,45 @@ pub fn inpaint_image(
     output_path: String,
     regions: Vec<(u32, u32, u32, u32)>,
 ) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let mut rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-
-    for (rx, ry, rw, rh) in regions {
-        let mut sum_r: u64 = 0;
-        let mut sum_g: u64 = 0;
-        let mut sum_b: u64 = 0;
-        let mut count: u64 = 0;
-        let border = 8u32;
-
-        for sy in ry.saturating_sub(border)..(ry + rh + border).min(h) {
-            for sx in rx.saturating_sub(border)..(rx + rw + border).min(w) {
-                if sx >= rx && sx < rx + rw && sy >= ry && sy < ry + rh { continue; }
-                let p = *rgba.get_pixel(sx, sy);
-                sum_r += p[0] as u64;
-                sum_g += p[1] as u64;
-                sum_b += p[2] as u64;
-                count += 1;
-            }
-        }
-
-        if count > 0 {
-            let avg = [(sum_r / count) as u8, (sum_g / count) as u8, (sum_b / count) as u8];
-            for y in ry..(ry + rh).min(h) {
-                for x in rx..(rx + rw).min(w) {
-                    let dx_edge = (x as i32 - rx as i32).min((rx + rw) as i32 - x as i32 - 1) as f64;
-                    let dy_edge = (y as i32 - ry as i32).min((ry + rh) as i32 - y as i32 - 1) as f64;
-                    let edge_dist = dx_edge.min(dy_edge).min(border as f64);
-                    let blend = (edge_dist / border as f64).min(1.0);
-                    let p = *rgba.get_pixel(x, y);
-                    let nr = (p[0] as f64 * (1.0 - blend) + avg[0] as f64 * blend) as u8;
-                    let ng = (p[1] as f64 * (1.0 - blend) + avg[1] as f64 * blend) as u8;
-                    let nb = (p[2] as f64 * (1.0 - blend) + avg[2] as f64 * blend) as u8;
-                    rgba.put_pixel(x, y, Rgba([nr, ng, nb, 255]));
-                }
-            }
-        }
-    }
-
-    rgba.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Inpainting completed".into() })
+    core_inpaint(input_path, output_path, regions).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }
 
 #[tauri::command]
 pub fn upscale_image(input_path: String, output_path: String, scale: u32) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let (w, h) = img.dimensions();
-    let new_w = w * scale;
-    let new_h = h * scale;
-    let upscaled = img.resize(new_w, new_h, image::imageops::FilterType::Lanczos3);
-    let sharpened = upscaled.unsharpen(1.0, 1);
-    sharpened.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Upscaled {}x ({}x{} -> {}x{})", scale, w, h, new_w, new_h) })
+    core_upscale(input_path, output_path, scale).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }
 
 #[tauri::command]
 pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut out = RgbaImage::new(w, h);
-
-    for y in 0..h {
-        for x in 0..w {
-            let p = *rgba.get_pixel(x, y);
-            let r = p[0] as f64;
-            let g = p[1] as f64;
-            let b = p[2] as f64;
-            let sr = (0.393 * r + 0.769 * g + 0.189 * b).min(255.0) as u8;
-            let sg = (0.349 * r + 0.686 * g + 0.168 * b).min(255.0) as u8;
-            let sb = (0.272 * r + 0.534 * g + 0.131 * b).min(255.0) as u8;
-            out.put_pixel(x, y, Rgba([sr, sg, sb, 255]));
-        }
-    }
-
-    out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Sepia filter applied".into() })
+    core_sepia(input_path, output_path).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }
 
 #[tauri::command]
 pub fn smart_sharpen(input_path: String, output_path: String, strength: f32) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-
-    let blurred = img.blur(strength * 0.3);
-    let blur_rgba = blurred.to_rgba8();
-    let mut out = RgbaImage::new(w, h);
-
-    let amount = (strength as f64).clamp(0.1, 5.0);
-
-    for y in 0..h {
-        for x in 0..w {
-            let orig = *rgba.get_pixel(x, y);
-            let blur_p = *blur_rgba.get_pixel(x, y);
-            let orig_lum = 0.299 * orig[0] as f64 + 0.587 * orig[1] as f64 + 0.114 * orig[2] as f64;
-            let blur_lum = 0.299 * blur_p[0] as f64 + 0.587 * blur_p[1] as f64 + 0.114 * blur_p[2] as f64;
-            let detail = orig_lum - blur_lum;
-            let edge_strength = (detail.abs() / 50.0).min(1.0);
-            let sharpen = amount * (0.5 + 0.5 * edge_strength);
-
-            let r = (orig[0] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
-            let g = (orig[1] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
-            let b = (orig[2] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
-            out.put_pixel(x, y, Rgba([r, g, b, orig[3]]));
-        }
-    }
-
-    out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Smart sharpen applied (strength: {})", strength) })
+    core_sharpen(input_path, output_path, strength).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }
 
 #[tauri::command]
 pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
-    let (w, h) = img.dimensions();
-    let blurred = img.blur(blur_strength);
-    let mut out = img.to_rgba8();
-    let blurred_rgba = blurred.to_rgba8();
-    let cx = w as f64 / 2.0;
-    let cy = h as f64 / 2.0;
-    let max_dist = (cx * cx + cy * cy).sqrt();
-
-    for y in 0..h {
-        for x in 0..w {
-            let dx = x as f64 - cx;
-            let dy = y as f64 - cy;
-            let dist = (dx * dx + dy * dy).sqrt() / max_dist;
-            let blend = (dist * 1.5).min(1.0);
-            let sharp = *out.get_pixel(x, y);
-            let blur_p = *blurred_rgba.get_pixel(x, y);
-            let r = (sharp[0] as f64 * (1.0 - blend) + blur_p[0] as f64 * blend) as u8;
-            let g = (sharp[1] as f64 * (1.0 - blend) + blur_p[1] as f64 * blend) as u8;
-            let b = (sharp[2] as f64 * (1.0 - blend) + blur_p[2] as f64 * blend) as u8;
-            out.put_pixel(x, y, Rgba([r, g, b, sharp[3]]));
-        }
-    }
-
-    out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Depth blur applied".into() })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use image::{ImageBuffer, Rgb};
-
-    fn create_simple_test_image() -> String {
-        let mut img: image::RgbImage = ImageBuffer::new(200, 200);
-        for y in 0..200 {
-            for x in 0..200 {
-                img.put_pixel(x, y, Rgb([255u8, 255, 255]));
-            }
-        }
-        let cx = 100.0f64;
-        let cy = 100.0f64;
-        let r = 40.0f64;
-        for y in 0..200 {
-            for x in 0..200 {
-                let dx = x as f64 - cx;
-                let dy = y as f64 - cy;
-                if dx * dx + dy * dy <= r * r {
-                    img.put_pixel(x, y, Rgb([200u8, 50, 50]));
-                }
-            }
-        }
-        let path = std::env::temp_dir().join("tinytools_test_simple.png");
-        img.save(&path).unwrap();
-        path.to_string_lossy().to_string()
-    }
-
-    fn create_gradient_test_image() -> String {
-        let mut img: image::RgbImage = ImageBuffer::new(400, 300);
-        for y in 0..300 {
-            for x in 0..400 {
-                let r = (180.0 + 40.0 * (y as f64 / 300.0)) as u8;
-                let g = (200.0 + 30.0 * (x as f64 / 400.0)) as u8;
-                let b = (220.0 - 20.0 * (y as f64 / 300.0)) as u8;
-                img.put_pixel(x, y, Rgb([r, g, b]));
-            }
-        }
-        for y in 60..140 {
-            for x in 160..240 {
-                let dx = x as f64 - 200.0;
-                let dy = y as f64 - 100.0;
-                if dx * dx + dy * dy <= 40.0 * 40.0 {
-                    img.put_pixel(x, y, Rgb([210u8, 170, 140]));
-                }
-            }
-        }
-        for y in 135..250 {
-            for x in 170..230 {
-                img.put_pixel(x, y, Rgb([80u8, 80, 180]));
-            }
-        }
-        for y in 150..220 {
-            for x in 140..170 {
-                img.put_pixel(x, y, Rgb([210u8, 170, 140]));
-            }
-        }
-        for y in 150..220 {
-            for x in 230..260 {
-                img.put_pixel(x, y, Rgb([210u8, 170, 140]));
-            }
-        }
-        let path = std::env::temp_dir().join("tinytools_test_portrait.png");
-        img.save(&path).unwrap();
-        path.to_string_lossy().to_string()
-    }
-
-    #[test]
-    fn test_bg_removal_simple() {
-        let input = create_simple_test_image();
-        let output = std::env::temp_dir().join("tinytools_test_simple_out.png");
-        let result = remove_background(input, output.to_string_lossy().to_string());
-        match result {
-            Ok(r) => {
-                println!("SUCCESS: {}", r.message);
-                assert!(r.success);
-                assert!(r.output_path.is_some());
-                let out_img = image::open(&output).unwrap();
-                let rgba = out_img.to_rgba8();
-                let (w, h) = rgba.dimensions();
-                assert_eq!(w, 200);
-                assert_eq!(h, 200);
-                let mut transparent = 0usize;
-                for y in 0..h {
-                    for x in 0..w {
-                        if rgba.get_pixel(x, y)[3] < 128 {
-                            transparent += 1;
-                        }
-                    }
-                }
-                let total = (w * h) as usize;
-                let bg_pct = transparent as f64 / total as f64 * 100.0;
-                println!("Transparent pixels: {}/{} ({:.1}%)", transparent, total, bg_pct);
-                assert!(bg_pct > 30.0, "Expected >30% transparent, got {:.1}%", bg_pct);
-            }
-            Err(e) => panic!("FAILED: {}", e),
-        }
-    }
-
-    #[test]
-    fn test_bg_removal_portrait() {
-        let input = create_gradient_test_image();
-        let output = std::env::temp_dir().join("tinytools_test_portrait_out.png");
-        let result = remove_background(input, output.to_string_lossy().to_string());
-        match result {
-            Ok(r) => {
-                println!("SUCCESS: {}", r.message);
-                assert!(r.success);
-                let out_img = image::open(&output).unwrap();
-                let rgba = out_img.to_rgba8();
-                let (w, h) = rgba.dimensions();
-                let mut fg_count = 0u64;
-                let mut bg_count = 0u64;
-                for y in 0..h {
-                    for x in 0..w {
-                        if rgba.get_pixel(x, y)[3] > 128 {
-                            fg_count += 1;
-                        } else {
-                            bg_count += 1;
-                        }
-                    }
-                }
-                let total = (w * h) as f64;
-                println!("Foreground: {} ({:.1}%)", fg_count, fg_count as f64 / total * 100.0);
-                println!("Background: {} ({:.1}%)", bg_count, bg_count as f64 / total * 100.0);
-                let fg_pct = fg_count as f64 / total * 100.0;
-                assert!(fg_pct > 5.0 && fg_pct < 80.0, "Foreground percentage out of range: {:.1}%", fg_pct);
-            }
-            Err(e) => panic!("FAILED: {}", e),
-        }
-    }
-
-    #[test]
-    fn test_bg_removal_with_real_image() {
-        let path = "C:/Users/anind/TestImages/test_simple.png";
-        if !std::path::Path::new(path).exists() {
-            eprintln!("Skipping real image test — file not found");
-            return;
-        }
-        let output = std::env::temp_dir().join("tinytools_test_real_out.png");
-        let result = remove_background(path.to_string(), output.to_string_lossy().to_string());
-        match result {
-            Ok(r) => {
-                println!("SUCCESS: {}", r.message);
-                assert!(r.success);
-            }
-            Err(e) => panic!("FAILED: {}", e),
-        }
-    }
-
-    #[test]
-    fn test_bg_removal_real_portrait() {
-        let path = "C:/Users/anind/TestImages/test_portrait.png";
-        if !std::path::Path::new(path).exists() {
-            eprintln!("Skipping real portrait test — file not found");
-            return;
-        }
-        let output = std::env::temp_dir().join("tinytools_test_real_portrait_out.png");
-        let result = remove_background(path.to_string(), output.to_string_lossy().to_string());
-        match result {
-            Ok(r) => {
-                println!("SUCCESS: {}", r.message);
-                assert!(r.success);
-                let out_img = image::open(&output).unwrap();
-                let rgba = out_img.to_rgba8();
-                let (w, h) = rgba.dimensions();
-                let mut fg_count = 0u64;
-                let mut total = 0u64;
-                for y in 0..h {
-                    for x in 0..w {
-                        total += 1;
-                        if rgba.get_pixel(x, y)[3] > 128 {
-                            fg_count += 1;
-                        }
-                    }
-                }
-                let fg_pct = fg_count as f64 / total as f64 * 100.0;
-                println!("Foreground: {} ({:.1}%)", fg_count, fg_pct);
-            }
-            Err(e) => panic!("FAILED: {}", e),
-        }
-    }
+    core_depth_blur(input_path, output_path, blur_strength).map(|r| ToolResult {
+        success: r.success,
+        output_path: r.output_path,
+        message: r.message,
+    })
 }

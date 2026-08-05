@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import ToolPage, { OptionRow, OptionSlider, OptionSelect } from "./ToolPage";
-import { stripMetadata, redactRegions, addWatermark } from "../lib/tauri";
+import { stripMetadata, redactRegions, addWatermark, isTauri } from "../lib/tauri";
 
 type PrivacyTool = "strip-metadata" | "redact" | "watermark";
 
@@ -11,6 +11,30 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
   const [watermarkPosition, setWatermarkPosition] = useState("bottom-right");
   const [redactMethod, setRedactMethod] = useState("blur");
   const [status, setStatus] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<{name: string, path: string}[]>([]);
+  const [regions, setRegions] = useState<[number, number, number, number][]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [startPos, setStartPos] = useState<{x: number, y: number} | null>(null);
+  const [currentBox, setCurrentBox] = useState<[number, number, number, number] | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    if (selectedFiles.length > 0 && selectedTool === "redact") {
+      const src = selectedFiles[0].path;
+      if (isTauri()) {
+        import('@tauri-apps/api/core').then((tauri) => setPreviewUrl(tauri.convertFileSrc(src)));
+      } else {
+        setPreviewUrl(src);
+      }
+    }
+  }, [selectedFiles, selectedTool]);
+
+  const handleFilesChange = async (files: { name: string; path: string }[]) => {
+    setSelectedFiles(files);
+    setRegions([]);
+    setStatus("");
+  };
 
   const handleProcess = async (files: { name: string; path: string }[]) => {
     const f = files[0];
@@ -24,7 +48,8 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
           result = await stripMetadata(f.path, out);
           break;
         case "redact":
-          result = await redactRegions(f.path, out, [[50, 50, 100, 100]], redactMethod);
+          const finalRegions = regions.length > 0 ? regions : [[50, 50, 100, 100]] as [number, number, number, number][];
+          result = await redactRegions(f.path, out, finalRegions, redactMethod);
           break;
         case "watermark":
           result = await addWatermark(f.path, out, watermarkText, watermarkOpacity, watermarkPosition);
@@ -42,8 +67,96 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
     { id: "watermark" as const, label: "Text Watermark", desc: "Add visible text overlay" },
   ];
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setStartPos({ x, y });
+    setIsDrawing(true);
+    setCurrentBox([x, y, 0, 0]);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawing || !startPos || !imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+    const bx = Math.min(x, startPos.x);
+    const by = Math.min(y, startPos.y);
+    const bw = Math.abs(x - startPos.x);
+    const bh = Math.abs(y - startPos.y);
+    setCurrentBox([bx, by, bw, bh]);
+  };
+
+  const handleMouseUp = () => {
+    if (isDrawing && currentBox && imgRef.current) {
+      const rect = imgRef.current.getBoundingClientRect();
+      const scaleX = imgRef.current.naturalWidth / rect.width;
+      const scaleY = imgRef.current.naturalHeight / rect.height;
+      const mappedBox: [number, number, number, number] = [
+        Math.round(currentBox[0] * scaleX),
+        Math.round(currentBox[1] * scaleY),
+        Math.round(currentBox[2] * scaleX),
+        Math.round(currentBox[3] * scaleY),
+      ];
+      if (mappedBox[2] > 5 && mappedBox[3] > 5) {
+        setRegions([...regions, mappedBox]);
+      }
+    }
+    setIsDrawing(false);
+    setStartPos(null);
+    setCurrentBox(null);
+  };
+
+  const renderPreviewNode = () => {
+    if (selectedTool !== "redact" || selectedFiles.length === 0 || !previewUrl) return undefined;
+    return (
+      <div
+        className="relative w-full h-full flex items-center justify-center bg-black/40 rounded-xl overflow-hidden cursor-crosshair select-none"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <img
+          ref={imgRef}
+          src={previewUrl}
+          alt="Preview"
+          className="max-w-full max-h-[300px] object-contain pointer-events-none"
+          draggable={false}
+        />
+        {imgRef.current && regions.map((r, i) => {
+          const rect = imgRef.current!.getBoundingClientRect();
+          const scaleX = rect.width / imgRef.current!.naturalWidth;
+          const scaleY = rect.height / imgRef.current!.naturalHeight;
+          return (
+            <div key={i} className="absolute border-2 border-red-500 bg-red-500/20 pointer-events-none"
+              style={{
+                left: (rect.left - imgRef.current!.parentElement!.getBoundingClientRect().left) + r[0] * scaleX,
+                top: (rect.top - imgRef.current!.parentElement!.getBoundingClientRect().top) + r[1] * scaleY,
+                width: r[2] * scaleX,
+                height: r[3] * scaleY,
+              }}
+            />
+          );
+        })}
+        {imgRef.current && currentBox && (
+          <div className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
+            style={{
+              left: (imgRef.current.getBoundingClientRect().left - imgRef.current.parentElement!.getBoundingClientRect().left) + currentBox[0],
+              top: (imgRef.current.getBoundingClientRect().top - imgRef.current.parentElement!.getBoundingClientRect().top) + currentBox[1],
+              width: currentBox[2],
+              height: currentBox[3],
+            }}
+          />
+        )}
+      </div>
+    );
+  };
+
   return (
-    <ToolPage title="Privacy & Metadata" description="Protect sensitive information in images" onProcess={handleProcess}>
+    <ToolPage key={selectedTool} title="Privacy & Metadata" description="Protect sensitive information in images" onProcess={handleProcess} onFilesChange={handleFilesChange} allowWeb={true} previewNode={renderPreviewNode()}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (
@@ -65,6 +178,12 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
               options={[{ value: "blur", label: "Blur" }, { value: "pixelate", label: "Pixelate" }]}
             />
           </OptionRow>
+          {regions.length > 0 && (
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+              <span className="text-xs text-white/60">{regions.length} regions selected</span>
+              <button onClick={() => setRegions([])} className="text-[10px] bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30">Clear</button>
+            </div>
+          )}
         </div>
       )}
 

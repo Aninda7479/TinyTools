@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Upload, X, Play } from "lucide-react";
-import { pickFiles } from "../lib/tauri";
+import { MonitorDown, Upload, X, Play } from "lucide-react";
+import { isTauri, pickFiles } from "../lib/tauri";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -19,6 +19,9 @@ export default function ToolPage({
   processLabel,
   multiFile = false,
   renderPreview,
+  allowWeb = false,
+  onFilesChange,
+  previewNode,
 }: {
   title: string;
   description: string;
@@ -27,6 +30,9 @@ export default function ToolPage({
   processLabel?: string;
   multiFile?: boolean;
   renderPreview?: (file: FileItem) => React.ReactNode;
+  allowWeb?: boolean;
+  onFilesChange?: (files: FileItem[]) => void;
+  previewNode?: React.ReactNode;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -39,14 +45,16 @@ export default function ToolPage({
         const picked = await pickFiles(filters);
         if (picked.length === 0) return;
         const newFiles = picked.map((f) => ({ name: f.name, path: f.path, size: f.size }));
-        setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
+        const updated = multiFile ? [...files, ...newFiles] : newFiles.slice(0, 1);
+        setFiles(updated);
+        onFilesChange?.(updated);
       } else {
         fileInputRef.current?.click();
       }
     } catch {
       fileInputRef.current?.click();
     }
-  }, [multiFile]);
+  }, [multiFile, files, onFilesChange]);
 
   const handleWebFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -57,7 +65,9 @@ export default function ToolPage({
       path: URL.createObjectURL(f), // Use ObjectURL as path for web
       size: f.size
     }));
-    setFiles((prev) => (multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1)));
+    const updated = multiFile ? [...files, ...newFiles] : newFiles.slice(0, 1);
+    setFiles(updated);
+    onFilesChange?.(updated);
     e.target.value = "";
   };
 
@@ -70,6 +80,8 @@ export default function ToolPage({
     [openPicker]
   );
 
+  const webBlocked = !isTauri() && !allowWeb;
+
   return (
     <div className="flex flex-col h-full gap-4">
       <div>
@@ -77,7 +89,19 @@ export default function ToolPage({
         <p className="text-sm text-white/40 mt-1">{description}</p>
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
+      {webBlocked && (
+        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-2xl border border-red-500/20 p-8 text-center">
+          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+            <MonitorDown className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Desktop App Required</h2>
+          <p className="text-sm text-white/60 max-w-md">
+            This tool requires the TinyTools native Rust backend to process files securely and efficiently. Please use the Desktop app to access this feature.
+          </p>
+        </div>
+      )}
+
+      <div className={`flex gap-4 flex-1 min-h-0 ${webBlocked ? "opacity-20 pointer-events-none select-none" : ""}`}>
         {/* Left: Options */}
         <div className="w-[340px] flex flex-col gap-3 overflow-y-auto pr-1">{children}</div>
 
@@ -133,6 +157,8 @@ export default function ToolPage({
               </>
             )}
           </motion.div>
+
+          {previewNode}
 
           {files.length > 0 && (
             <motion.button

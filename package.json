@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dev:app": "npm run tauri dev",
+    "build:wasm": "cd src-wasm && wasm-pack build --target web --out-dir ../src/lib/wasm"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",

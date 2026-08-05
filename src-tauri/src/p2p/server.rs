@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 use crate::p2p::{encryption, get_incoming_transfers, now_secs, IncomingTransfer};
 use std::path::PathBuf;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use tower_http::services::ServeDir;
 
 #[derive(Clone)]
 pub struct ServerState {
@@ -621,3 +622,64 @@ fn uuid_simple() -> String {
 }
 
 use axum::routing::post;
+
+async fn spa_fallback() -> Html<String> {
+    let index_html = tokio::fs::read_to_string("dist/index.html")
+        .await
+        .unwrap_or_else(|_| "<html><body>App not found</body></html>".to_string());
+    Html(index_html)
+}
+
+pub async fn start_homelab_server(
+    local_ip: &str,
+) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
+    let listener = std::net::TcpListener::bind("0.0.0.0:0")
+        .map_err(|e| format!("Failed to bind server: {}", e))?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+
+    let certified_key = rcgen::generate_simple_self_signed(vec![
+        "localhost".to_string(),
+        local_ip.to_string(),
+    ])
+    .map_err(|e| format!("Failed to generate portal certificate: {}", e))?;
+    let tls_config = axum_server::tls_rustls::RustlsConfig::from_pem(
+        certified_key.cert.pem().into_bytes(),
+        certified_key.key_pair.serialize_pem().into_bytes(),
+    )
+    .await
+    .map_err(|e| format!("Failed to configure HTTPS: {}", e))?;
+
+    let state = ServerState {
+        transfers: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        downloads_dir: Arc::new(tokio::sync::Mutex::new(
+            dirs_next::download_dir()
+                .or_else(|| dirs_next::home_dir())
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .to_string_lossy()
+                .to_string(),
+        )),
+        download_limits: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        receive_password: None,
+        receive_only: false,
+    };
+
+    let app = Router::new()
+        .route("/api/info", get(get_portal_info))
+        .route("/api/download", get(download_file))
+        .route("/api/announce", post(handle_announce))
+        .route("/api/upload-data/:id", post(handle_upload_data))
+        .route("/api/upload-status/:id", get(upload_status))
+        .route("/api/download-transfer/:id", get(download_transfer))
+        .route("/receive", get(receive_page))
+        .nest_service("/assets", ServeDir::new("dist/assets"))
+        .fallback(spa_fallback)
+        .with_state(state);
+
+    let handle = tokio::spawn(async move {
+        let _ = axum_server::from_tcp_rustls(listener, tls_config)
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+            .await;
+    });
+
+    Ok((port, handle))
+}
