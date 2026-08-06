@@ -70,6 +70,68 @@ fn collect_page_ids(doc: &Document) -> Vec<ObjectId> {
     pages.into_iter().map(|(_, id)| id).collect()
 }
 
+fn get_page_rotation(doc: &Document, page_id: ObjectId) -> i64 {
+    let mut current_id = page_id;
+    loop {
+        if let Ok(obj) = doc.get_object(current_id) {
+            if let Ok(dict) = obj.as_dict() {
+                if let Some(rot) = dict.get(b"Rotate").ok().and_then(|o| o.as_i64().ok()) {
+                    return rot;
+                }
+                if let Ok(parent_ref) = dict.get(b"Parent").and_then(|o| o.as_reference()) {
+                    current_id = parent_ref;
+                    continue;
+                }
+            }
+        }
+        break;
+    }
+    0
+}
+
+fn safe_add_page_contents(doc: &mut Document, page_id: ObjectId, new_content: Vec<u8>) -> Result<(), String> {
+    let q_stream_id = doc.add_object(Object::Stream(Stream::new(
+        dictionary! {},
+        b"q\n".to_vec(),
+    )));
+
+    let q_upper_stream_id = doc.add_object(Object::Stream(Stream::new(
+        dictionary! {},
+        b"\nQ\n".to_vec(),
+    )));
+
+    let new_stream_id = doc.add_object(Object::Stream(Stream::new(
+        dictionary! {},
+        new_content,
+    )));
+
+    if let Ok(Object::Dictionary(ref mut page_dict)) = doc.get_object_mut(page_id) {
+        let mut new_contents = vec![Object::Reference(q_stream_id)];
+
+        if let Some(contents_obj) = page_dict.get(b"Contents").ok().cloned() {
+            match contents_obj {
+                Object::Array(arr) => {
+                    for item in arr {
+                        new_contents.push(item);
+                    }
+                }
+                Object::Reference(ref_id) => {
+                    new_contents.push(Object::Reference(ref_id));
+                }
+                _ => {}
+            }
+        }
+
+        new_contents.push(Object::Reference(q_upper_stream_id));
+        new_contents.push(Object::Reference(new_stream_id));
+
+        page_dict.set("Contents", Object::Array(new_contents));
+        Ok(())
+    } else {
+        Err("Page object not found or not a dictionary".to_string())
+    }
+}
+
 fn get_page_dimensions(doc: &Document, page_id: ObjectId) -> Result<(f64, f64), String> {
     let obj = doc.get_object(page_id).map_err(|e| e.to_string())?;
     let dict = obj.as_dict().map_err(|e| e.to_string())?;
@@ -894,7 +956,7 @@ pub fn add_pdf_watermark(input_path: String, output_path: String, text: String,
         }
 
         let encoded = Content { operations: ops }.encode().map_err(|e| e.to_string())?;
-        doc.add_page_contents(pid, encoded).map_err(|e| e.to_string())?;
+        safe_add_page_contents(&mut doc, pid, encoded)?;
     }
     doc.save(&output_path).map_err(|e| e.to_string())?;
     Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Added watermark '{}' to {} pages", text, page_ids.len()) })
@@ -917,25 +979,86 @@ pub fn add_page_numbers(input_path: String, output_path: String, font_size: f64,
 
         let label = format!("{} of {}", i + 1, total);
         let text_w = label.len() as f64 * font_size * 0.5;
-        let (tx, ty) = match position.as_str() {
-            "top-center" => ((w - text_w) / 2.0, h - 30.0),
-            "top-left" => (20.0, h - 30.0),
-            "top-right" => (w - text_w - 20.0, h - 30.0),
-            "bottom-left" => (20.0, 20.0),
-            "bottom-right" => (w - text_w - 20.0, 20.0),
-            _ => ((w - text_w) / 2.0, 20.0),
+        let rotate = (get_page_rotation(&doc, pid) % 360 + 360) % 360;
+        let (tx, ty) = match rotate {
+            90 => {
+                let vx_start = match position.as_str() {
+                    "top-center" | "bottom-center" => h / 2.0 - text_w / 2.0,
+                    "top-left" | "bottom-left" => 20.0,
+                    "top-right" | "bottom-right" => h - text_w - 20.0,
+                    _ => h / 2.0 - text_w / 2.0,
+                };
+                let vy = match position.as_str() {
+                    "top-left" | "top-center" | "top-right" => w - 30.0,
+                    _ => 20.0,
+                };
+                (w - vy, vx_start)
+            }
+            180 => {
+                let vx_start = match position.as_str() {
+                    "top-center" | "bottom-center" => w / 2.0 - text_w / 2.0,
+                    "top-left" | "bottom-left" => 20.0,
+                    "top-right" | "bottom-right" => w - text_w - 20.0,
+                    _ => w / 2.0 - text_w / 2.0,
+                };
+                let vy = match position.as_str() {
+                    "top-left" | "top-center" | "top-right" => h - 30.0,
+                    _ => 20.0,
+                };
+                (w - vx_start, h - vy)
+            }
+            270 => {
+                let vx_start = match position.as_str() {
+                    "top-center" | "bottom-center" => h / 2.0 - text_w / 2.0,
+                    "top-left" | "bottom-left" => 20.0,
+                    "top-right" | "bottom-right" => h - text_w - 20.0,
+                    _ => h / 2.0 - text_w / 2.0,
+                };
+                let vy = match position.as_str() {
+                    "top-left" | "top-center" | "top-right" => w - 30.0,
+                    _ => 20.0,
+                };
+                (vy, h - vx_start)
+            }
+            _ => {
+                let vx_start = match position.as_str() {
+                    "top-center" | "bottom-center" => w / 2.0 - text_w / 2.0,
+                    "top-left" | "bottom-left" => 20.0,
+                    "top-right" | "bottom-right" => w - text_w - 20.0,
+                    _ => w / 2.0 - text_w / 2.0,
+                };
+                let vy = match position.as_str() {
+                    "top-left" | "top-center" | "top-right" => h - 30.0,
+                    _ => 20.0,
+                };
+                (vx_start, vy)
+            }
+        };
+
+        let (a, b, c, d) = match rotate {
+            90 => (0.0, 1.0, -1.0, 0.0),
+            180 => (-1.0, 0.0, 0.0, -1.0),
+            270 => (0.0, -1.0, 1.0, 0.0),
+            _ => (1.0, 0.0, 0.0, 1.0),
         };
 
         let font_name_owned = font_name.to_vec();
         let ops = vec![
             Operation::new("BT", vec![]),
             Operation::new("Tf", vec![Object::Name(font_name_owned), Object::Real(font_size as f32)]),
-            Operation::new("Td", vec![Object::Real(tx as f32), Object::Real(ty as f32)]),
+            Operation::new("Tm", vec![
+                Object::Real(a as f32),
+                Object::Real(b as f32),
+                Object::Real(c as f32),
+                Object::Real(d as f32),
+                Object::Real(tx as f32),
+                Object::Real(ty as f32),
+            ]),
             Operation::new("Tj", vec![Object::String(label.into_bytes(), StringFormat::Literal)]),
             Operation::new("ET", vec![]),
         ];
         let encoded = Content { operations: ops }.encode().map_err(|e| e.to_string())?;
-        doc.add_page_contents(pid, encoded).map_err(|e| e.to_string())?;
+        safe_add_page_contents(&mut doc, pid, encoded)?;
     }
     doc.save(&output_path).map_err(|e| e.to_string())?;
     Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Added page numbers to {} pages", total) })

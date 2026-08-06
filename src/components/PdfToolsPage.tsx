@@ -52,7 +52,7 @@ const tools: ToolCard[] = [
   { id: "compress", icon: Minimize2, title: "Compress PDF", description: "Reduce file size", category: "Enhance" },
   { id: "flatten", icon: Minimize2, title: "Flatten PDF", description: "Remove form fields", category: "Enhance" },
   { id: "watermark", icon: Stamp, title: "Watermark", description: "Add text watermark overlay", category: "Enhance" },
-  { id: "pagenum", icon: Hash, title: "Page Numbers", description: "Stamp page numbers", category: "Enhance" },
+  { id: "pagenum", icon: Hash, title: "Add Page no.", description: "Stamp page numbers", category: "Enhance" },
 ];
 
 const categories = ["Info", "Pages", "Convert", "Security", "Enhance"];
