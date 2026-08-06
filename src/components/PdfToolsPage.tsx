@@ -3,15 +3,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Merge, Scissors, ArrowUpDown, RotateCw, Crop, Trash2,
   ImagePlus, Lock, Unlock, Minimize2, Stamp, Hash, Info, Upload,
-  Play, X, ChevronLeft, CheckCircle, AlertTriangle
+  Play, X, ChevronLeft, CheckCircle, AlertTriangle, FolderOpen
 } from "lucide-react";
 import {
   mergePdfs, splitPdf, reorderPages, rotatePages,
   cropPages, deletePages, imagesToPdf, extractPdfText,
   encryptPdf, decryptPdf, unwrapPdf, compressPdf, flattenPdf,
-  addPdfWatermark, addPageNumbers, pickFiles
+  addPdfWatermark, addPageNumbers, pickFiles, saveFile
 } from "../lib/tauri";
 import type { ToolResult } from "../lib/tauri";
+import { revealInFolder } from "../lib/p2p-api";
 import PdfInfoPage from "./PdfInfoPage";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -267,13 +268,20 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     }
   };
 
-  const process = () => {
+  const process = async () => {
     if (files.length === 0) return;
     const paths = files.map(f => f.path);
 
     switch (tool) {
-      case "merge":
-        return run(() => mergePdfs(paths, outPath("merged.pdf")));
+      case "merge": {
+        const defaultSavePath = outPath("merged.pdf");
+        let savePath = await saveFile(defaultSavePath, [{ name: "PDF Documents", extensions: ["pdf"] }]);
+        if (!savePath) return;
+        if (!savePath.toLowerCase().endsWith(".pdf")) {
+          savePath += ".pdf";
+        }
+        return run(() => mergePdfs(paths, savePath));
+      }
       case "split":
         return run(() => splitPdf(paths[0], files[0].path.replace(/[\\/][^\\/]+$/, ""), pages || undefined));
       case "reorder": {
@@ -413,9 +421,24 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           <AnimatePresence>
             {result && (
               <motion.div key="result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex items-start gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-                <div className="text-xs text-emerald-300/80 whitespace-pre-wrap break-all">{result.message}</div>
+                className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                  <div className="text-xs text-emerald-300/80 whitespace-pre-wrap break-all">{result.message}</div>
+                </div>
+                {result.output_path && (
+                  <div className="flex flex-col gap-2 pt-2 border-t border-emerald-500/10 mt-1">
+                    <span className="text-[10px] uppercase tracking-wider text-emerald-400/40">Output File</span>
+                    <span className="text-[10px] text-emerald-300/60 break-all font-mono">{result.output_path}</span>
+                    <button
+                      onClick={() => revealInFolder(result.output_path!)}
+                      className="flex items-center gap-1.5 self-start px-2.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 transition-colors text-[10px] font-medium cursor-pointer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      Open in Folder
+                    </button>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
