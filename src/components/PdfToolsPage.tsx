@@ -9,7 +9,8 @@ import {
   mergePdfs, splitPdf, reorderPages, rotatePages,
   cropPages, deletePages, imagesToPdf, extractPdfText,
   encryptPdf, decryptPdf, unwrapPdf, compressPdf, flattenPdf,
-  addPdfWatermark, addPageNumbers, pickFiles, saveFile, getPdfInfo
+  addPdfWatermark, addPageNumbers, pickFiles, saveFile, getPdfInfo,
+  pickDirectory
 } from "../lib/tauri";
 import type { ToolResult } from "../lib/tauri";
 import { revealInFolder } from "../lib/p2p-api";
@@ -144,6 +145,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [individualRotations, setIndividualRotations] = useState<Record<number, number>>({});
   const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [splitMode, setSplitMode] = useState<"multiple" | "single">("multiple");
 
   const multiFile = tool === "merge" || tool === "img2pdf";
 
@@ -165,6 +167,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     setSelectedPages([]);
     setIndividualRotations({});
     setPdfDoc(null);
+    setSplitMode("multiple");
   };
 
   const openPicker = useCallback(async () => {
@@ -273,7 +276,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       setPdfDoc(null);
       return;
     }
-    if (tool === "rotate") {
+    if (tool === "rotate" || tool === "split") {
       setLoading(true);
       setError("");
 
@@ -366,11 +369,28 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
         return <p className="text-xs text-white/40">Select 2+ PDF files to merge in order</p>;
       case "split":
         return (
-          <label className="text-xs text-white/40">
-            Pages to extract (e.g. 1-3,5,8 or leave empty for all)
-            <input value={pages} onChange={e => setPages(e.target.value)} placeholder="1-3,5,8"
-              className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
-          </label>
+          <>
+            <label className="text-xs text-white/40">
+              Extraction Mode
+              <select value={splitMode} onChange={e => setSplitMode(e.target.value as "multiple" | "single")}
+                className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80">
+                <option value="multiple">Multiple Files (One file per page)</option>
+                <option value="single">Single File (Combine to one PDF)</option>
+              </select>
+            </label>
+            <label className="text-xs text-white/40 mt-3 block">
+              Pages to extract (e.g. 1-3,5,8 or leave empty for all)
+              <input value={pages} onChange={e => {
+                const val = e.target.value;
+                setPages(val);
+                if (pageCount > 0) {
+                  const parsed = parsePageRange(val, pageCount);
+                  setSelectedPages(parsed);
+                }
+              }} placeholder="1-3,5,8 or leave empty for all"
+                className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
+            </label>
+          </>
         );
       case "reorder":
         return (
@@ -442,11 +462,11 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       case "encrypt":
         return (
           <>
-            <label className="text-xs text-white/40">User Password
+            <label className="text-xs text-white/40">Document Open Password (User)
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
             </label>
-            <label className="text-xs text-white/40">Owner Password
+            <label className="text-xs text-white/40 mt-3 block">Permissions Password (Owner - Optional)
               <input type="password" value={ownerPassword} onChange={e => setOwnerPassword(e.target.value)}
                 className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
             </label>
@@ -519,8 +539,25 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
         if (!savePath) return;
         return run(() => mergePdfs(paths, savePath));
       }
-      case "split":
-        return run(() => splitPdf(paths[0], files[0].path.replace(/[\\/][^\\/]+$/, ""), pages || undefined));
+      case "split": {
+        if (splitMode === "multiple") {
+          const outDir = await pickDirectory();
+          if (!outDir) return;
+          return run(() => splitPdf(paths[0], outDir, pages || undefined));
+        } else {
+          const savePath = await getSavePath("extracted.pdf");
+          if (!savePath) return;
+          const pagesToKeep = pages
+            ? parsePageRange(pages, pageCount)
+            : Array.from({ length: pageCount }, (_, i) => i + 1);
+
+          if (pagesToKeep.length === 0) {
+            setError("Please select at least one page to extract.");
+            return;
+          }
+          return run(() => reorderPages(paths[0], savePath, pagesToKeep));
+        }
+      }
       case "reorder": {
         const savePath = await getSavePath("reordered.pdf");
         if (!savePath) return;
@@ -688,8 +725,8 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
 
         {/* Right: File + Results */}
         <div className="flex-1 flex flex-col gap-4">
-          {/* Interactive Page Rotation Grid */}
-          {tool === "rotate" && files.length > 0 && pageCount > 0 ? (
+          {/* Interactive Page Selection/Rotation Grid */}
+          {(tool === "rotate" || tool === "split") && files.length > 0 && pageCount > 0 ? (
             <div className="flex flex-col gap-3 flex-1 min-h-0 bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-y-auto">
               {/* File Info & Action Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/5">
@@ -725,41 +762,43 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                 </div>
 
                 {/* Batch Rotate Action */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-white/40 mr-1">Rotate selected:</span>
-                  {[90, 180, 270].map(deg => (
+                {tool === "rotate" && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-white/40 mr-1">Rotate selected:</span>
+                    {[90, 180, 270].map(deg => (
+                      <button
+                        key={deg}
+                        onClick={() => handleBatchRotate(deg)}
+                        className="flex items-center gap-0.5 px-2 py-1 rounded bg-blue-500/15 border border-blue-500/25 hover:bg-blue-500/25 text-[10px] text-blue-400 transition-colors cursor-pointer"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        +{deg}°
+                      </button>
+                    ))}
                     <button
-                      key={deg}
-                      onClick={() => handleBatchRotate(deg)}
-                      className="flex items-center gap-0.5 px-2 py-1 rounded bg-blue-500/15 border border-blue-500/25 hover:bg-blue-500/25 text-[10px] text-blue-400 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setIndividualRotations(prev => {
+                          const updated = { ...prev };
+                          const targetPages = selectedPages.length > 0 ? selectedPages : Array.from({ length: pageCount }, (_, i) => i + 1);
+                          for (const p of targetPages) {
+                            updated[p] = 0;
+                          }
+                          return updated;
+                        });
+                      }}
+                      className="px-2 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/60 transition-colors cursor-pointer"
                     >
-                      <RotateCw className="w-3 h-3" />
-                      +{deg}°
+                      Reset Selected
                     </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setIndividualRotations(prev => {
-                        const updated = { ...prev };
-                        const targetPages = selectedPages.length > 0 ? selectedPages : Array.from({ length: pageCount }, (_, i) => i + 1);
-                        for (const p of targetPages) {
-                          updated[p] = 0;
-                        }
-                        return updated;
-                      });
-                    }}
-                    className="px-2 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/60 transition-colors cursor-pointer"
-                  >
-                    Reset Selected
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Responsive Page Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-2">
                 {Array.from({ length: pageCount }, (_, i) => i + 1).map(pageNum => {
                   const isSelected = selectedPages.includes(pageNum);
-                  const rot = individualRotations[pageNum] || 0;
+                  const rot = tool === "rotate" ? (individualRotations[pageNum] || 0) : 0;
                   return (
                     <div
                       key={pageNum}
@@ -784,13 +823,15 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                         </div>
 
                         {/* Card rotate button (+90) */}
-                        <button
-                          onClick={e => handlePageCardRotate(pageNum, e)}
-                          className="p-1 rounded bg-black/40 hover:bg-black/60 border border-white/10 hover:border-white/25 transition-all text-white/60 hover:text-white cursor-pointer"
-                          title="Rotate 90° Clockwise"
-                        >
-                          <RotateCw className="w-3 h-3" />
-                        </button>
+                        {tool === "rotate" && (
+                          <button
+                            onClick={e => handlePageCardRotate(pageNum, e)}
+                            className="p-1 rounded bg-black/40 hover:bg-black/60 border border-white/10 hover:border-white/25 transition-all text-white/60 hover:text-white cursor-pointer"
+                            title="Rotate 90° Clockwise"
+                          >
+                            <RotateCw className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Visual Page Thumbnail Container */}

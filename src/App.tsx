@@ -21,6 +21,7 @@ import P2PReceivePage from "./components/P2PReceivePage";
 import GlobalSharePage from "./components/GlobalSharePage";
 import GlobalReceivePage from "./components/GlobalReceivePage";
 import VideoToolsPage from "./components/VideoToolsPage";
+import AboutPage from "./components/AboutPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -75,6 +76,7 @@ function AppInner() {
       case "global-share": return <GlobalSharePage key="global-share" />;
       case "global-receive": return <GlobalReceivePage key="global-receive" />;
       case "video": return <VideoToolsPage key="video" defaultSub={activeSub} />;
+      case "about": return <AboutPage key="about" />;
       default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }
   };

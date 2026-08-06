@@ -11,7 +11,7 @@ import {
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
 export type Tool =
-  | "welcome"
+  | "welcome" | "about"
   | "ai" | "editing" | "compress" | "conversion" | "process" | "batch"
   | "qr" | "pdf"
   | "privacy" | "password" | "encryption"
@@ -220,7 +220,7 @@ export default function Sidebar({ activeTool, onToolSelect }: SidebarProps) {
         );
       })}
 
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-1.5">
         <motion.button
           onClick={() => onToolSelect("welcome")}
           className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
@@ -232,6 +232,19 @@ export default function Sidebar({ activeTool, onToolSelect }: SidebarProps) {
           title="Home"
         >
           <Sparkles className="w-5 h-5" />
+        </motion.button>
+
+        <motion.button
+          onClick={() => onToolSelect("about")}
+          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+            activeTool === "about" ? "bg-white/10 text-white" : "text-white/50 hover:text-white/80 hover:bg-white/5"
+          }`}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          transition={spring}
+          title="About TinyTools"
+        >
+          <Info className="w-5 h-5" />
         </motion.button>
       </div>
     </aside>

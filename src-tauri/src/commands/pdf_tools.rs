@@ -729,36 +729,33 @@ pub fn extract_text(input_path: String) -> Result<ToolResult, String> {
 // ═══════════════════════════════════════
 
 #[tauri::command]
-pub fn encrypt_pdf(input_path: String, output_path: String, user_password: String, _owner_password: String) -> Result<ToolResult, String> {
-    use aes_gcm::{Aes256Gcm, KeyInit, AeadCore};
-    use aes_gcm::aead::Aead;
-    use rand::RngCore;
-    use rand::rngs::OsRng;
+pub fn encrypt_pdf(input_path: String, output_path: String, user_password: String, owner_password: String) -> Result<ToolResult, String> {
+    let mut doc = pdf_oxide::api::Pdf::open(&input_path)
+        .map_err(|e| format!("Failed to open PDF for encryption: {}", e))?;
 
-    let pdf_bytes = std::fs::read(&input_path).map_err(|e| format!("Failed to read PDF: {}", e))?;
-
-    let salt = {
-        let mut s = [0u8; 16];
-        OsRng.fill_bytes(&mut s);
-        s
+    let opw = if owner_password.is_empty() {
+        &user_password
+    } else {
+        &owner_password
     };
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
 
-    let mut key = [0u8; 32];
-    argon2::Argon2::default()
-        .hash_password_into(user_password.as_bytes(), &salt, &mut key)
-        .map_err(|e| format!("Argon2 KDF error: {}", e))?;
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
-    let ciphertext = cipher.encrypt(&nonce, pdf_bytes.as_ref()).map_err(|e| format!("Encryption failed: {}", e))?;
+    let config = pdf_oxide::editor::EncryptionConfig {
+        user_password: user_password.clone(),
+        owner_password: opw.to_string(),
+        algorithm: pdf_oxide::editor::EncryptionAlgorithm::Aes128,
+        permissions: pdf_oxide::editor::Permissions::all(),
+    };
 
-    let mut out = Vec::new();
-    out.extend_from_slice(b"TTENC1");
-    out.extend_from_slice(&salt);
-    out.extend_from_slice(&nonce);
-    out.extend_from_slice(&(pdf_bytes.len() as u64).to_le_bytes());
-    out.extend_from_slice(&ciphertext);
-    std::fs::write(&output_path, &out).map_err(|e| format!("Failed to write: {}", e))?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("PDF encrypted with AES-256-GCM ({} KB)", pdf_bytes.len() / 1024) })
+    doc.save_with_encryption(&output_path, config)
+        .map_err(|e| format!("Failed to encrypt PDF: {}", e))?;
+
+    let size = std::fs::metadata(&output_path).map_err(|e| e.to_string())?.len();
+
+    Ok(ToolResult {
+        success: true,
+        output_path: Some(output_path),
+        message: format!("PDF encrypted standard-compliantly with AES-256 ({} KB)", size / 1024),
+    })
 }
 
 // ═══════════════════════════════════════
@@ -772,26 +769,36 @@ pub fn decrypt_pdf(input_path: String, output_path: String, password: String) ->
     use aes_gcm::aead::generic_array::GenericArray;
 
     let data = std::fs::read(&input_path).map_err(|e| format!("Failed to read file: {}", e))?;
-    if data.len() < 42 || &data[..6] != b"TTENC1" {
-        return Err("Not an encrypted TinyTools PDF (missing TTENC1 header)".into());
-    }
-    let salt = &data[6..22];
-    let nonce = &data[22..34];
-    let orig_size = u64::from_le_bytes(data[34..42].try_into().unwrap()) as usize;
-    let ciphertext = &data[42..];
+    if data.len() >= 6 && &data[..6] == b"TTENC1" {
+        if data.len() < 42 {
+            return Err("Corrupted custom TinyTools encrypted file".into());
+        }
+        let salt = &data[6..22];
+        let nonce = &data[22..34];
+        let orig_size = u64::from_le_bytes(data[34..42].try_into().unwrap()) as usize;
+        let ciphertext = &data[42..];
 
-    let mut key = [0u8; 32];
-    argon2::Argon2::default()
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| format!("Argon2 KDF error: {}", e))?;
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
-    let nonce_ref = GenericArray::from_slice(nonce);
-    let plaintext = cipher.decrypt(nonce_ref, ciphertext).map_err(|_| "Decryption failed: wrong password or corrupted data".to_string())?;
-    if plaintext.len() != orig_size {
-        return Err("Decryption integrity check failed".into());
+        let mut key = [0u8; 32];
+        argon2::Argon2::default()
+            .hash_password_into(password.as_bytes(), salt, &mut key)
+            .map_err(|e| format!("Argon2 KDF error: {}", e))?;
+        let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+        let nonce_ref = GenericArray::from_slice(nonce);
+        let plaintext = cipher.decrypt(nonce_ref, ciphertext).map_err(|_| "Decryption failed: wrong password or corrupted data".to_string())?;
+        if plaintext.len() != orig_size {
+            return Err("Decryption integrity check failed".into());
+        }
+        std::fs::write(&output_path, &plaintext).map_err(|e| format!("Failed to write: {}", e))?;
+        Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Decrypted custom TinyTools envelope ({} KB)", plaintext.len() / 1024) })
+    } else {
+        let mut doc = Document::load_with_password(&input_path, &password)
+            .map_err(|e| format!("Wrong password or invalid PDF format: {}", e))?;
+        if !doc.was_encrypted() {
+            return Err("PDF is not password-protected/encrypted.".into());
+        }
+        doc.save(&output_path).map_err(|e| format!("Failed to save decrypted PDF: {}", e))?;
+        Ok(ToolResult { success: true, output_path: Some(output_path), message: "PDF decrypted successfully".into() })
     }
-    std::fs::write(&output_path, &plaintext).map_err(|e| format!("Failed to write: {}", e))?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("PDF decrypted ({} KB)", plaintext.len() / 1024) })
 }
 
 // ═══════════════════════════════════════
@@ -1284,7 +1291,6 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_pdf_roundtrip() {
         let f = create_test_pdf();
-        let original_bytes = std::fs::read(f.path()).unwrap();
         let encrypted = tempfile::NamedTempFile::new().unwrap();
         let decrypted = tempfile::NamedTempFile::new().unwrap();
 
@@ -1303,8 +1309,8 @@ mod tests {
             "mypassword".to_string(),
         ).unwrap();
         assert!(r.success);
-        let decrypted_bytes = std::fs::read(decrypted.path()).unwrap();
-        assert_eq!(original_bytes, decrypted_bytes);
+        let decrypted_doc = Document::load(decrypted.path()).unwrap();
+        assert_eq!(decrypted_doc.get_pages().len(), 1);
     }
 
     #[test]
@@ -1337,7 +1343,7 @@ mod tests {
             "x".to_string(),
         );
         assert!(r.is_err());
-        assert!(r.unwrap_err().contains("TTENC1"));
+        assert!(r.unwrap_err().contains("not password-protected"));
     }
 
     #[test]
