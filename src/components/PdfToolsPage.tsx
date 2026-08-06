@@ -276,7 +276,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       setPdfDoc(null);
       return;
     }
-    if (tool === "rotate" || tool === "split") {
+    if (tool === "rotate" || tool === "split" || tool === "delete") {
       setLoading(true);
       setError("");
 
@@ -444,8 +444,15 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       case "delete":
         return (
           <label className="text-xs text-white/40">
-            Pages to delete (e.g. 1,3,5-7)
-            <input value={pages} onChange={e => setPages(e.target.value)} placeholder="1,3,5-7"
+            Pages to delete (e.g. 1-3,5,8)
+            <input value={pages} onChange={e => {
+              const val = e.target.value;
+              setPages(val);
+              if (pageCount > 0) {
+                const parsed = parsePageRange(val, pageCount);
+                setSelectedPages(parsed);
+              }
+            }} placeholder="1-3,5,8"
               className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
           </label>
         );
@@ -617,13 +624,13 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       case "delete": {
         const savePath = await getSavePath("deleted.pdf");
         if (!savePath) return;
-        const del = pages.split(",").flatMap(s => {
-          if (s.includes("-")) {
-            const [a, b] = s.split("-").map(Number);
-            return Array.from({ length: b - a + 1 }, (_, i) => a + i);
-          }
-          return [parseInt(s)];
-        }).filter(n => !isNaN(n));
+        const del = selectedPages.length > 0
+          ? selectedPages
+          : parsePageRange(pages, pageCount);
+        if (del.length === 0) {
+          setError("Please select at least one page to delete.");
+          return;
+        }
         return run(() => deletePages(paths[0], savePath, del));
       }
       case "img2pdf": {
@@ -726,7 +733,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
         {/* Right: File + Results */}
         <div className="flex-1 flex flex-col gap-4">
           {/* Interactive Page Selection/Rotation Grid */}
-          {(tool === "rotate" || tool === "split") && files.length > 0 && pageCount > 0 ? (
+          {(tool === "rotate" || tool === "split" || tool === "delete") && files.length > 0 && pageCount > 0 ? (
             <div className="flex flex-col gap-3 flex-1 min-h-0 bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-y-auto">
               {/* File Info & Action Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/5">
@@ -792,6 +799,18 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                     </button>
                   </div>
                 )}
+
+                {/* Delete Selection Status */}
+                {tool === "delete" && (
+                  <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-red-500/10 border border-red-500/20">
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    <span className="text-[10px] text-red-300">
+                      {selectedPages.length > 0
+                        ? `${selectedPages.length} page${selectedPages.length > 1 ? "s" : ""} will be deleted`
+                        : "Click pages to mark for deletion"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Responsive Page Grid */}
@@ -799,13 +818,16 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                 {Array.from({ length: pageCount }, (_, i) => i + 1).map(pageNum => {
                   const isSelected = selectedPages.includes(pageNum);
                   const rot = tool === "rotate" ? (individualRotations[pageNum] || 0) : 0;
+                  const deleteMode = tool === "delete";
                   return (
                     <div
                       key={pageNum}
                       onClick={() => handlePageCardClick(pageNum)}
                       className={`relative group flex flex-col items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none bg-surface/40 hover:bg-surface/60 ${
                         isSelected
-                          ? "border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.1)]"
+                          ? deleteMode
+                            ? "border-red-500/40 shadow-[0_0_12px_rgba(239,68,68,0.1)]"
+                            : "border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.1)]"
                           : "border-white/5 hover:border-white/15"
                       }`}
                     >
@@ -815,7 +837,9 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                         <div
                           className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
                             isSelected
-                              ? "bg-blue-500 border-blue-600 text-white"
+                              ? deleteMode
+                                ? "bg-red-500 border-red-600 text-white"
+                                : "bg-blue-500 border-blue-600 text-white"
                               : "border-white/25 bg-black/20"
                           }`}
                         >
@@ -832,6 +856,13 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                             <RotateCw className="w-3 h-3" />
                           </button>
                         )}
+
+                        {/* Card delete badge */}
+                        {deleteMode && isSelected && (
+                          <div className="p-1 rounded bg-red-500/20 border border-red-500/30 text-red-400">
+                            <Trash2 className="w-3 h-3" />
+                          </div>
+                        )}
                       </div>
 
                       {/* Visual Page Thumbnail Container */}
@@ -840,7 +871,9 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                           animate={{ rotate: rot }}
                           transition={{ type: "spring", stiffness: 200, damping: 20 }}
                           className={`w-16 h-22 rounded-md bg-gradient-to-br from-white/[0.04] to-white/[0.01] border flex flex-col items-center justify-center shadow-lg relative overflow-hidden ${
-                            isSelected ? "border-blue-500/30" : "border-white/10"
+                            isSelected
+                              ? deleteMode ? "border-red-500/30" : "border-blue-500/30"
+                              : "border-white/10"
                           }`}
                         >
                           {/* Inside Thumbnail design */}
@@ -864,6 +897,11 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                         {rot > 0 && (
                           <span className="font-semibold text-blue-400 bg-blue-500/10 px-1 py-0.5 rounded text-[8px]">
                             {rot}°
+                          </span>
+                        )}
+                        {deleteMode && isSelected && (
+                          <span className="font-semibold text-red-400 bg-red-500/10 px-1 py-0.5 rounded text-[8px]">
+                            Delete
                           </span>
                         )}
                       </div>
