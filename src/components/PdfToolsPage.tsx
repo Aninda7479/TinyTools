@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Merge, Scissors, ArrowUpDown, RotateCw, Crop, Trash2,
@@ -9,11 +9,16 @@ import {
   mergePdfs, splitPdf, reorderPages, rotatePages,
   cropPages, deletePages, imagesToPdf, extractPdfText,
   encryptPdf, decryptPdf, unwrapPdf, compressPdf, flattenPdf,
-  addPdfWatermark, addPageNumbers, pickFiles, saveFile
+  addPdfWatermark, addPageNumbers, pickFiles, saveFile, getPdfInfo
 } from "../lib/tauri";
 import type { ToolResult } from "../lib/tauri";
 import { revealInFolder } from "../lib/p2p-api";
 import PdfInfoPage from "./PdfInfoPage";
+import { readFile } from "@tauri-apps/plugin-fs";
+import * as pdfjs from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -51,6 +56,64 @@ const tools: ToolCard[] = [
 
 const categories = ["Info", "Pages", "Convert", "Security", "Enhance"];
 
+interface PdfPageThumbnailProps {
+  pdfDoc: any;
+  pageNum: number;
+}
+
+function PdfPageThumbnail({ pdfDoc, pageNum }: PdfPageThumbnailProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!pdfDoc) return;
+    let active = true;
+
+    pdfDoc.getPage(pageNum)
+      .then((page: any) => {
+        if (!active) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const context = canvas.getContext("2d");
+        if (!context) return;
+
+        const viewport = page.getViewport({ scale: 0.15 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        return page.render(renderContext).promise;
+      })
+      .then(() => {
+        if (active) setLoading(false);
+      })
+      .catch((err: any) => {
+        console.error(`Error rendering page ${pageNum}:`, err);
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [pdfDoc, pageNum]);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-black/10">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-10">
+          <span className="animate-spin w-4 h-4 border border-white/20 border-t-white/60 rounded-full" />
+        </div>
+      )}
+      <canvas ref={canvasRef} className="w-full h-full object-contain" />
+    </div>
+  );
+}
+
 export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {}) {
   const [tool, setTool] = useState<PdfTool>((defaultSub as PdfTool) || "select");
   const [files, setFiles] = useState<{ name: string; path: string }[]>([]);
@@ -76,6 +139,12 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
   const [pnPos, setPnPos] = useState("bottom-center");
   const [margin, setMargin] = useState(20);
 
+  // Interactive page selection & rotation state
+  const [pageCount, setPageCount] = useState<number>(0);
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
+  const [individualRotations, setIndividualRotations] = useState<Record<number, number>>({});
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+
   const multiFile = tool === "merge" || tool === "img2pdf";
 
   const reset = () => {
@@ -89,9 +158,13 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     setOwnerPassword("");
     setAngle(90);
     setCropTop(0); setCropBottom(0); setCropLeft(0); setCropRight(0);
-    setWmText(""); setWmSize(48); setWmOpacity(0.3); setWmAngle(-45);
+    setWmText("CONFIDENTIAL"); setWmSize(48); setWmOpacity(0.3); setWmAngle(-45);
     setPnSize(12); setPnPos("bottom-center");
     setMargin(20);
+    setPageCount(0);
+    setSelectedPages([]);
+    setIndividualRotations({});
+    setPdfDoc(null);
   };
 
   const openPicker = useCallback(async () => {
@@ -126,6 +199,167 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     return `${dir}/${name}`;
   };
 
+  const getSavePath = async (defaultName: string): Promise<string | null> => {
+    const defaultSavePath = outPath(defaultName);
+    let savePath = await saveFile(defaultSavePath, [{ name: "PDF Documents", extensions: ["pdf"] }]);
+    if (!savePath) return null;
+    if (!savePath.toLowerCase().endsWith(".pdf")) {
+      savePath += ".pdf";
+    }
+    return savePath;
+  };
+
+  // Parse page range string (e.g., "1-3,5") to array of page numbers
+  const parsePageRange = (rangeStr: string, maxPages: number): number[] => {
+    const selected: number[] = [];
+    const parts = rangeStr.split(",");
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (trimmed.includes("-")) {
+        const [startStr, endStr] = trimmed.split("-");
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        if (!isNaN(start) && !isNaN(end)) {
+          const s = Math.min(start, end);
+          const e = Math.max(start, end);
+          for (let i = s; i <= e; i++) {
+            if (i >= 1 && i <= maxPages) selected.push(i);
+          }
+        }
+      } else {
+        const page = parseInt(trimmed);
+        if (!isNaN(page) && page >= 1 && page <= maxPages) {
+          selected.push(page);
+        }
+      }
+    }
+    return Array.from(new Set(selected)).sort((a, b) => a - b);
+  };
+
+  // Convert array of page numbers to a range string (e.g., [1,2,3,5] -> "1-3,5")
+  const formatPageRange = (pagesArr: number[]): string => {
+    if (pagesArr.length === 0) return "";
+    const sorted = [...pagesArr].sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let start = sorted[0];
+    let end = sorted[0];
+    
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) {
+        end = sorted[i];
+      } else {
+        if (start === end) {
+          ranges.push(`${start}`);
+        } else {
+          ranges.push(`${start}-${end}`);
+        }
+        start = sorted[i];
+        end = sorted[i];
+      }
+    }
+    if (start === end) {
+      ranges.push(`${start}`);
+    } else {
+      ranges.push(`${start}-${end}`);
+    }
+    return ranges.join(",");
+  };
+
+  useEffect(() => {
+    if (files.length === 0) {
+      setPageCount(0);
+      setSelectedPages([]);
+      setIndividualRotations({});
+      setPdfDoc(null);
+      return;
+    }
+    if (tool === "rotate") {
+      setLoading(true);
+      setError("");
+
+      readFile(files[0].path)
+        .then(bytes => {
+          const loadingTask = pdfjs.getDocument({ data: bytes });
+          return loadingTask.promise;
+        })
+        .then(pdf => {
+          setPdfDoc(pdf);
+          const count = pdf.numPages || 0;
+          setPageCount(count);
+          // Initialize rotations to 0
+          const initial: Record<number, number> = {};
+          for (let i = 1; i <= count; i++) {
+            initial[i] = 0;
+          }
+          setIndividualRotations(initial);
+          setSelectedPages([]);
+          setPages("");
+        })
+        .catch(err => {
+          console.error("PDF.js load error:", err);
+          // Fall back to Rust info fetching if file reading/parsing fails
+          getPdfInfo(files[0].path)
+            .then(r => {
+              if (r.success) {
+                const info = JSON.parse(r.message);
+                const count = info.page_count || 0;
+                setPageCount(count);
+                const initial: Record<number, number> = {};
+                for (let i = 1; i <= count; i++) {
+                  initial[i] = 0;
+                }
+                setIndividualRotations(initial);
+                setSelectedPages([]);
+                setPages("");
+              } else {
+                setError(r.message);
+              }
+            })
+            .catch(e => {
+              setError(`Failed to read PDF pages: ${String(e)}`);
+            });
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [files, tool]);
+
+  const handlePageCardClick = (pageNum: number) => {
+    let newSelected: number[];
+    if (selectedPages.includes(pageNum)) {
+      newSelected = selectedPages.filter(p => p !== pageNum);
+    } else {
+      newSelected = [...selectedPages, pageNum];
+    }
+    setSelectedPages(newSelected);
+    setPages(formatPageRange(newSelected));
+  };
+
+  const handlePageCardRotate = (pageNum: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Avoid toggling selection when clicking rotate button
+    setIndividualRotations(prev => {
+      const current = prev[pageNum] || 0;
+      const next = (current + 90) % 360;
+      return { ...prev, [pageNum]: next };
+    });
+  };
+
+  const handleBatchRotate = (rotAngle: number) => {
+    setIndividualRotations(prev => {
+      const updated = { ...prev };
+      // If no page is selected, rotate all of them
+      const targetPages = selectedPages.length > 0
+        ? selectedPages
+        : Array.from({ length: pageCount }, (_, i) => i + 1);
+
+      for (const p of targetPages) {
+        updated[p] = ((prev[p] || 0) + rotAngle) % 360;
+      }
+      return updated;
+    });
+  };
+
   const renderToolPanel = () => {
     switch (tool) {
       case "merge":
@@ -150,12 +384,19 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
         return (
           <>
             <label className="text-xs text-white/40">
-              Pages (empty = all)
-              <input value={pages} onChange={e => setPages(e.target.value)} placeholder="1-5"
+              Pages to rotate (e.g. 1-3,5)
+              <input value={pages} onChange={e => {
+                const val = e.target.value;
+                setPages(val);
+                if (pageCount > 0) {
+                  const parsed = parsePageRange(val, pageCount);
+                  setSelectedPages(parsed);
+                }
+              }} placeholder="1-5 or leave empty for all"
                 className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
             </label>
             <label className="text-xs text-white/40">
-              Angle
+              Angle (for batch rotation)
               <select value={angle} onChange={e => setAngle(Number(e.target.value))}
                 className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80">
                 <option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option>
@@ -274,25 +515,71 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
 
     switch (tool) {
       case "merge": {
-        const defaultSavePath = outPath("merged.pdf");
-        let savePath = await saveFile(defaultSavePath, [{ name: "PDF Documents", extensions: ["pdf"] }]);
+        const savePath = await getSavePath("merged.pdf");
         if (!savePath) return;
-        if (!savePath.toLowerCase().endsWith(".pdf")) {
-          savePath += ".pdf";
-        }
         return run(() => mergePdfs(paths, savePath));
       }
       case "split":
         return run(() => splitPdf(paths[0], files[0].path.replace(/[\\/][^\\/]+$/, ""), pages || undefined));
       case "reorder": {
+        const savePath = await getSavePath("reordered.pdf");
+        if (!savePath) return;
         const order = orderStr.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-        return run(() => reorderPages(paths[0], outPath("reordered.pdf"), order));
+        return run(() => reorderPages(paths[0], savePath, order));
       }
-      case "rotate":
-        return run(() => rotatePages(paths[0], outPath("rotated.pdf"), pages || undefined, angle));
-      case "crop":
-        return run(() => cropPages(paths[0], outPath("cropped.pdf"), pages || undefined, cropTop, cropBottom, cropLeft, cropRight));
+      case "rotate": {
+        const savePath = await getSavePath("rotated.pdf");
+        if (!savePath) return;
+
+        // Group page indices by rotation angle
+        const rotations: Record<number, number[]> = { 90: [], 180: [], 270: [] };
+        for (const [pageStr, val] of Object.entries(individualRotations)) {
+          const pageNum = Number(pageStr);
+          const normalizedAngle = ((val % 360) + 360) % 360;
+          if (normalizedAngle !== 0) {
+            rotations[normalizedAngle as 90 | 180 | 270]?.push(pageNum);
+          }
+        }
+
+        const activeRotations = Object.entries(rotations)
+          .filter(([_, pList]) => pList.length > 0)
+          .map(([ang, pList]) => ({ angle: Number(ang), pages: pList.sort((a, b) => a - b) }));
+
+        if (activeRotations.length === 0) {
+          // Fallback if no individual rotation is set: use selected pages and global angle
+          return run(() => rotatePages(paths[0], savePath, pages || undefined, angle));
+        }
+
+        // Run sequential rotations
+        return run(async () => {
+          let currentInput = paths[0];
+          let lastResult: ToolResult = { success: false, message: "", output_path: null };
+          
+          for (let i = 0; i < activeRotations.length; i++) {
+            const { angle: rotAngle, pages: rotPages } = activeRotations[i];
+            const pagesStr = rotPages.join(",");
+            const isLast = i === activeRotations.length - 1;
+            const tempOutput = isLast ? savePath : outPath(`rotated_temp_${i}.pdf`);
+            
+            lastResult = await rotatePages(currentInput, tempOutput, pagesStr, rotAngle);
+            if (!lastResult.success) {
+              throw new Error(lastResult.message || `Failed to rotate pages for angle ${rotAngle}`);
+            }
+            
+            currentInput = tempOutput;
+          }
+          
+          return lastResult;
+        });
+      }
+      case "crop": {
+        const savePath = await getSavePath("cropped.pdf");
+        if (!savePath) return;
+        return run(() => cropPages(paths[0], savePath, pages || undefined, cropTop, cropBottom, cropLeft, cropRight));
+      }
       case "delete": {
+        const savePath = await getSavePath("deleted.pdf");
+        if (!savePath) return;
         const del = pages.split(",").flatMap(s => {
           if (s.includes("-")) {
             const [a, b] = s.split("-").map(Number);
@@ -300,26 +587,50 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           }
           return [parseInt(s)];
         }).filter(n => !isNaN(n));
-        return run(() => deletePages(paths[0], outPath("deleted.pdf"), del));
+        return run(() => deletePages(paths[0], savePath, del));
       }
-      case "img2pdf":
-        return run(() => imagesToPdf(paths, outPath("images.pdf"), margin));
+      case "img2pdf": {
+        const savePath = await getSavePath("images.pdf");
+        if (!savePath) return;
+        return run(() => imagesToPdf(paths, savePath, margin));
+      }
       case "text":
         return run(() => extractPdfText(paths[0]));
-      case "encrypt":
-        return run(() => encryptPdf(paths[0], outPath("encrypted.pdf"), password, ownerPassword || password));
-      case "decrypt":
-        return run(() => decryptPdf(paths[0], outPath("decrypted.pdf"), password));
-      case "unwrap":
-        return run(() => unwrapPdf(paths[0], outPath("unwrapped.pdf"), password));
-      case "compress":
-        return run(() => compressPdf(paths[0], outPath("compressed.pdf")));
-      case "flatten":
-        return run(() => flattenPdf(paths[0], outPath("flattened.pdf")));
-      case "watermark":
-        return run(() => addPdfWatermark(paths[0], outPath("watermarked.pdf"), wmText, wmSize, wmOpacity, wmAngle));
-      case "pagenum":
-        return run(() => addPageNumbers(paths[0], outPath("numbered.pdf"), pnSize, pnPos));
+      case "encrypt": {
+        const savePath = await getSavePath("encrypted.pdf");
+        if (!savePath) return;
+        return run(() => encryptPdf(paths[0], savePath, password, ownerPassword || password));
+      }
+      case "decrypt": {
+        const savePath = await getSavePath("decrypted.pdf");
+        if (!savePath) return;
+        return run(() => decryptPdf(paths[0], savePath, password));
+      }
+      case "unwrap": {
+        const savePath = await getSavePath("unwrapped.pdf");
+        if (!savePath) return;
+        return run(() => unwrapPdf(paths[0], savePath, password));
+      }
+      case "compress": {
+        const savePath = await getSavePath("compressed.pdf");
+        if (!savePath) return;
+        return run(() => compressPdf(paths[0], savePath));
+      }
+      case "flatten": {
+        const savePath = await getSavePath("flattened.pdf");
+        if (!savePath) return;
+        return run(() => flattenPdf(paths[0], savePath));
+      }
+      case "watermark": {
+        const savePath = await getSavePath("watermarked.pdf");
+        if (!savePath) return;
+        return run(() => addPdfWatermark(paths[0], savePath, wmText, wmSize, wmOpacity, wmAngle));
+      }
+      case "pagenum": {
+        const savePath = await getSavePath("numbered.pdf");
+        if (!savePath) return;
+        return run(() => addPageNumbers(paths[0], savePath, pnSize, pnPos));
+      }
     }
   };
 
@@ -377,41 +688,186 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
 
         {/* Right: File + Results */}
         <div className="flex-1 flex flex-col gap-4">
-          {/* Drop zone */}
-          <motion.div
-            onDragOver={e => { e.preventDefault(); }}
-            onDrop={e => { e.preventDefault(); openPicker(); }}
-            animate={{ borderColor: files.length ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)" }}
-            className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-2 cursor-pointer hover:border-white/20 transition-colors min-h-[120px]"
-            onClick={openPicker}
-          >
-            {files.length > 0 ? (
-              <div className="flex gap-2 flex-wrap">
-                {files.map((f) => (
-                  <div key={f.path} className="relative group flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
-                    <FileText className="w-4 h-4 text-white/50" />
-                    <span className="text-xs text-white/70 max-w-[150px] truncate">{f.name}</span>
-                    <button onClick={e => { e.stopPropagation(); setFiles(p => p.filter(x => x.path !== f.path)); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X className="w-3 h-3 text-white/40" />
+          {/* Interactive Page Rotation Grid */}
+          {tool === "rotate" && files.length > 0 && pageCount > 0 ? (
+            <div className="flex flex-col gap-3 flex-1 min-h-0 bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-y-auto">
+              {/* File Info & Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/5">
+                <div className="flex items-center gap-2 bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">
+                  <FileText className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-[11px] text-white/70 max-w-[200px] truncate">{files[0].name}</span>
+                  <button onClick={reset} className="p-0.5 hover:bg-white/10 rounded">
+                    <X className="w-3.5 h-3.5 text-white/40" />
+                  </button>
+                </div>
+
+                {/* Selection Controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const all = Array.from({ length: pageCount }, (_, i) => i + 1);
+                      setSelectedPages(all);
+                      setPages(formatPageRange(all));
+                    }}
+                    className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedPages([]);
+                      setPages("");
+                    }}
+                    className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+
+                {/* Batch Rotate Action */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-white/40 mr-1">Rotate selected:</span>
+                  {[90, 180, 270].map(deg => (
+                    <button
+                      key={deg}
+                      onClick={() => handleBatchRotate(deg)}
+                      className="flex items-center gap-0.5 px-2 py-1 rounded bg-blue-500/15 border border-blue-500/25 hover:bg-blue-500/25 text-[10px] text-blue-400 transition-colors cursor-pointer"
+                    >
+                      <RotateCw className="w-3 h-3" />
+                      +{deg}°
                     </button>
-                  </div>
-                ))}
+                  ))}
+                  <button
+                    onClick={() => {
+                      setIndividualRotations(prev => {
+                        const updated = { ...prev };
+                        const targetPages = selectedPages.length > 0 ? selectedPages : Array.from({ length: pageCount }, (_, i) => i + 1);
+                        for (const p of targetPages) {
+                          updated[p] = 0;
+                        }
+                        return updated;
+                      });
+                    }}
+                    className="px-2 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/60 transition-colors cursor-pointer"
+                  >
+                    Reset Selected
+                  </button>
+                </div>
               </div>
-            ) : (
-              <>
-                <Upload className="w-6 h-6 text-white/30" />
-                <p className="text-xs text-white/50">Drop {multiFile ? "files" : "a PDF"} here or click to browse</p>
-              </>
-            )}
-          </motion.div>
+
+              {/* Responsive Page Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-2">
+                {Array.from({ length: pageCount }, (_, i) => i + 1).map(pageNum => {
+                  const isSelected = selectedPages.includes(pageNum);
+                  const rot = individualRotations[pageNum] || 0;
+                  return (
+                    <div
+                      key={pageNum}
+                      onClick={() => handlePageCardClick(pageNum)}
+                      className={`relative group flex flex-col items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none bg-surface/40 hover:bg-surface/60 ${
+                        isSelected
+                          ? "border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.1)]"
+                          : "border-white/5 hover:border-white/15"
+                      }`}
+                    >
+                      {/* Checkbox and Individual Rotate Button overlay */}
+                      <div className="absolute top-2 left-2 right-2 flex justify-between items-center opacity-80 group-hover:opacity-100 transition-opacity z-10">
+                        {/* Checkbox */}
+                        <div
+                          className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? "bg-blue-500 border-blue-600 text-white"
+                              : "border-white/25 bg-black/20"
+                          }`}
+                        >
+                          {isSelected && <span className="text-[9px] font-bold">✓</span>}
+                        </div>
+
+                        {/* Card rotate button (+90) */}
+                        <button
+                          onClick={e => handlePageCardRotate(pageNum, e)}
+                          className="p-1 rounded bg-black/40 hover:bg-black/60 border border-white/10 hover:border-white/25 transition-all text-white/60 hover:text-white cursor-pointer"
+                          title="Rotate 90° Clockwise"
+                        >
+                          <RotateCw className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {/* Visual Page Thumbnail Container */}
+                      <div className="w-20 h-28 my-4 flex items-center justify-center">
+                        <motion.div
+                          animate={{ rotate: rot }}
+                          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                          className={`w-16 h-22 rounded-md bg-gradient-to-br from-white/[0.04] to-white/[0.01] border flex flex-col items-center justify-center shadow-lg relative overflow-hidden ${
+                            isSelected ? "border-blue-500/30" : "border-white/10"
+                          }`}
+                        >
+                          {/* Inside Thumbnail design */}
+                          {pdfDoc ? (
+                            <PdfPageThumbnail pdfDoc={pdfDoc} pageNum={pageNum} />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+                              <FileText className={`w-6 h-6 ${isSelected ? "text-blue-400/50" : "text-white/20"}`} />
+                              <span className="text-[9px] font-semibold text-white/40">{pageNum}</span>
+                            </div>
+                          )}
+                          
+                          {/* Corner folding effect */}
+                          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-black/30 border-b border-l border-white/10 rounded-bl-sm z-10" />
+                        </motion.div>
+                      </div>
+
+                      {/* Card Footer labels */}
+                      <div className="w-full flex items-center justify-between text-[10px] text-white/35 mt-1 border-t border-white/[0.03] pt-1.5 font-sans">
+                        <span>Page {pageNum}</span>
+                        {rot > 0 && (
+                          <span className="font-semibold text-blue-400 bg-blue-500/10 px-1 py-0.5 rounded text-[8px]">
+                            {rot}°
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Standard Drop Zone */
+            <motion.div
+              onDragOver={e => { e.preventDefault(); }}
+              onDrop={e => { e.preventDefault(); openPicker(); }}
+              animate={{ borderColor: files.length ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)" }}
+              className="border-2 border-dashed rounded-2xl p-6 flex flex-col items-center gap-2 cursor-pointer hover:border-white/20 transition-colors min-h-[120px]"
+              onClick={openPicker}
+            >
+              {files.length > 0 ? (
+                <div className="flex gap-2 flex-wrap">
+                  {files.map((f) => (
+                    <div key={f.path} className="relative group flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+                      <FileText className="w-4 h-4 text-white/50" />
+                      <span className="text-xs text-white/70 max-w-[150px] truncate">{f.name}</span>
+                      <button onClick={e => { e.stopPropagation(); setFiles(p => p.filter(x => x.path !== f.path)); }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                        <X className="w-3 h-3 text-white/40" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-6 h-6 text-white/30" />
+                  <p className="text-xs text-white/50">Drop {multiFile ? "files" : "a PDF"} here or click to browse</p>
+                </>
+              )}
+            </motion.div>
+          )}
 
           {/* Process button */}
           {files.length > 0 && (
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={spring}
               disabled={loading}
               onClick={process}
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors disabled:opacity-50">
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors disabled:opacity-50 cursor-pointer">
               {loading ? <span className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full" /> : <Play className="w-4 h-4" />}
               {loading ? "Processing..." : toolCard.title}
             </motion.button>
