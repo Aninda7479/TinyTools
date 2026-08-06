@@ -384,10 +384,10 @@ export default function EncryptionPage({ defaultSub }: { defaultSub?: string } =
             </div>
           )}
 
-          {isTextBased && !isClassic && (
+          {!isClassic && (
             <div className="flex gap-2">
               {(["encrypt", "decrypt"] as const).map((m) => (
-                <button key={m} onClick={() => { setTextMode(m); setOutput(""); setRawBase64(""); }}
+                <button key={m} onClick={() => { setTextMode(m); setOutput(""); setRawBase64(""); setFileOutputPath(""); setOutputFilePath(""); }}
                   className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${textMode === m ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-white/5 text-white/50 border border-transparent hover:bg-white/10"}`}
                 >{m === "encrypt" ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}{m === "encrypt" ? "Encrypt" : "Decrypt"}</button>
               ))}
