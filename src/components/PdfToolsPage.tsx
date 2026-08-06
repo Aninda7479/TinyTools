@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Merge, Scissors, ArrowUpDown, RotateCw, Crop, Trash2,
   ImagePlus, Lock, Unlock, Minimize2, Stamp, Hash, Info, Upload,
-  Play, X, ChevronLeft, CheckCircle, AlertTriangle, FolderOpen
+  Play, X, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, FolderOpen, GripVertical
 } from "lucide-react";
 import {
   mergePdfs, splitPdf, reorderPages, rotatePages,
@@ -115,6 +115,37 @@ function PdfPageThumbnail({ pdfDoc, pageNum }: PdfPageThumbnailProps) {
   );
 }
 
+function ReorderPositionInput({ value, max, onCommit }: { value: number; max: number; onCommit: (n: number) => void }) {
+  const [draft, setDraft] = useState<string>(String(value));
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(String(value));
+  }, [value, editing]);
+
+  const commit = () => {
+    const n = parseInt(draft);
+    if (!isNaN(n)) onCommit(Math.max(1, Math.min(max, n)));
+    else setDraft(String(value));
+    setEditing(false);
+  };
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={max}
+      value={draft}
+      onFocus={() => setEditing(true)}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === "Enter") { commit(); (e.target as HTMLInputElement).blur(); } }}
+      className="w-8 text-center bg-white/5 border border-white/10 rounded text-[10px] text-white/70 outline-none py-0.5 focus:border-blue-500/40"
+      title="Set position (1-based)"
+    />
+  );
+}
+
 export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {}) {
   const [tool, setTool] = useState<PdfTool>((defaultSub as PdfTool) || "select");
   const [files, setFiles] = useState<{ name: string; path: string }[]>([]);
@@ -146,6 +177,8 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
   const [individualRotations, setIndividualRotations] = useState<Record<number, number>>({});
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [splitMode, setSplitMode] = useState<"multiple" | "single">("multiple");
+  const [order, setOrder] = useState<number[]>([]);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
   const multiFile = tool === "merge" || tool === "img2pdf";
 
@@ -168,6 +201,9 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
     setIndividualRotations({});
     setPdfDoc(null);
     setSplitMode("multiple");
+    setOrder([]);
+    orderRef.current = [];
+    setDraggedIdx(null);
   };
 
   const openPicker = useCallback(async () => {
@@ -274,9 +310,10 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       setSelectedPages([]);
       setIndividualRotations({});
       setPdfDoc(null);
+      setDraggedIdx(null);
       return;
     }
-    if (tool === "rotate" || tool === "split" || tool === "delete") {
+    if (tool === "rotate" || tool === "split" || tool === "delete" || tool === "reorder") {
       setLoading(true);
       setError("");
 
@@ -297,6 +334,10 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
           setIndividualRotations(initial);
           setSelectedPages([]);
           setPages("");
+          const defaultOrder = Array.from({ length: count }, (_, i) => i + 1);
+          orderRef.current = defaultOrder;
+          setOrder(defaultOrder);
+          setOrderStr(defaultOrder.join(","));
         })
         .catch(err => {
           console.error("PDF.js load error:", err);
@@ -314,6 +355,10 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                 setIndividualRotations(initial);
                 setSelectedPages([]);
                 setPages("");
+                const defaultOrder = Array.from({ length: count }, (_, i) => i + 1);
+                orderRef.current = defaultOrder;
+                setOrder(defaultOrder);
+                setOrderStr(defaultOrder.join(","));
               } else {
                 setError(r.message);
               }
@@ -346,6 +391,55 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       const next = (current + 90) % 360;
       return { ...prev, [pageNum]: next };
     });
+  };
+
+  const orderRef = useRef<number[]>([]);
+  const draggedIdxRef = useRef<number | null>(null);
+
+  const handleReorder = (next: number[]) => {
+    orderRef.current = next;
+    setOrder(next);
+    setOrderStr(next.join(","));
+  };
+
+  const handleReorderDragStart = (e: React.DragEvent, idx: number) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(idx));
+    draggedIdxRef.current = idx;
+    setDraggedIdx(idx);
+  };
+
+  const handleReorderDragEnter = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    const from = draggedIdxRef.current;
+    if (from === null || from === idx) return;
+    draggedIdxRef.current = idx;
+    const next = [...orderRef.current];
+    const [moved] = next.splice(from, 1);
+    next.splice(idx, 0, moved);
+    handleReorder(next);
+    setDraggedIdx(idx);
+  };
+
+  const handleReorderDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleReorderDragEnd = () => {
+    draggedIdxRef.current = null;
+    setDraggedIdx(null);
+  };
+
+  const movePageTo = (from: number, to: number) => {
+    const len = orderRef.current.length;
+    if (len === 0 || from < 0 || from >= len) return;
+    const target = Math.max(0, Math.min(len - 1, to));
+    if (from === target) return;
+    const next = [...orderRef.current];
+    const [moved] = next.splice(from, 1);
+    next.splice(target, 0, moved);
+    handleReorder(next);
   };
 
   const handleBatchRotate = (rotAngle: number) => {
@@ -394,11 +488,16 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
         );
       case "reorder":
         return (
-          <label className="text-xs text-white/40">
-            New order (comma-separated, e.g. 3,1,2)
-            <input value={orderStr} onChange={e => setOrderStr(e.target.value)} placeholder="3,1,2"
-              className="mt-1 w-full bg-white/5 border border-border rounded-lg px-3 py-2 text-xs text-white/80 outline-none" />
-          </label>
+          <>
+            <p className="text-xs text-white/40">Drag the page thumbnails to rearrange them. Leftmost page appears first in the output.</p>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {order.map((p, idx) => (
+                <span key={p} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-white/60">
+                  <span className="text-white/30">{idx + 1}.</span> <span className="text-blue-400 font-medium">{p}</span>
+                </span>
+              ))}
+            </div>
+          </>
         );
       case "rotate":
         return (
@@ -568,8 +667,14 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
       case "reorder": {
         const savePath = await getSavePath("reordered.pdf");
         if (!savePath) return;
-        const order = orderStr.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-        return run(() => reorderPages(paths[0], savePath, order));
+        const finalOrder = order.length > 0
+          ? order
+          : orderStr.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+        if (finalOrder.length === 0) {
+          setError("Please set a page order first.");
+          return;
+        }
+        return run(() => reorderPages(paths[0], savePath, finalOrder));
       }
       case "rotate": {
         const savePath = await getSavePath("rotated.pdf");
@@ -733,7 +838,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
         {/* Right: File + Results */}
         <div className="flex-1 flex flex-col gap-4">
           {/* Interactive Page Selection/Rotation Grid */}
-          {(tool === "rotate" || tool === "split" || tool === "delete") && files.length > 0 && pageCount > 0 ? (
+          {(tool === "rotate" || tool === "split" || tool === "delete" || tool === "reorder") && files.length > 0 && pageCount > 0 ? (
             <div className="flex flex-col gap-3 flex-1 min-h-0 bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-y-auto">
               {/* File Info & Action Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/5">
@@ -746,27 +851,29 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                 </div>
 
                 {/* Selection Controls */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const all = Array.from({ length: pageCount }, (_, i) => i + 1);
-                      setSelectedPages(all);
-                      setPages(formatPageRange(all));
-                    }}
-                    className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
-                  >
-                    Select All
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedPages([]);
-                      setPages("");
-                    }}
-                    className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
-                  >
-                    Deselect All
-                  </button>
-                </div>
+                {tool !== "reorder" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const all = Array.from({ length: pageCount }, (_, i) => i + 1);
+                        setSelectedPages(all);
+                        setPages(formatPageRange(all));
+                      }}
+                      className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedPages([]);
+                        setPages("");
+                      }}
+                      className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                )}
 
                 {/* Batch Rotate Action */}
                 {tool === "rotate" && (
@@ -811,9 +918,100 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                     </span>
                   </div>
                 )}
+
+                {/* Reorder Actions */}
+                {tool === "reorder" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-white/40 mr-1">Drag to reorder:</span>
+                    <button
+                      onClick={() => {
+                        const reversed = [...order].reverse();
+                        handleReorder(reversed);
+                      }}
+                      className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
+                    >
+                      Reverse Order
+                    </button>
+                    <button
+                      onClick={() => {
+                        const def = Array.from({ length: pageCount }, (_, i) => i + 1);
+                        handleReorder(def);
+                      }}
+                      className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-white/20 text-[10px] text-white/70 transition-colors cursor-pointer"
+                    >
+                      Reset Order
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Responsive Page Grid */}
+              {/* Reorderable Grid */}
+              {tool === "reorder" ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-2">
+                  {order.map((pageNum, idx) => (
+                    <div
+                      key={pageNum}
+                      draggable
+                      onDragStart={e => handleReorderDragStart(e, idx)}
+                      onDragEnter={e => handleReorderDragEnter(e, idx)}
+                      onDragOver={handleReorderDragOver}
+                      onDragEnd={handleReorderDragEnd}
+                      className={`relative group flex flex-col items-center justify-between p-3 rounded-xl border transition-all select-none bg-surface/40 hover:bg-surface/60 ${
+                        draggedIdx === idx
+                          ? "opacity-50 border-blue-500/60"
+                          : "border-blue-500/30 cursor-grab active:cursor-grabbing"
+                      }`}
+                    >
+                      {/* Position + Grip overlay */}
+                      <div className="absolute top-2 left-2 right-2 flex justify-between items-center z-10">
+                        <div className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[9px] font-bold">
+                          {idx + 1}
+                        </div>
+                        <GripVertical className="w-3.5 h-3.5 text-white/30" />
+                      </div>
+
+                      {/* Visual Page Thumbnail Container */}
+                      <div className="w-20 h-28 my-4 flex items-center justify-center">
+                        <div className="w-16 h-24 rounded-md bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-blue-500/20 flex flex-col items-center justify-center shadow-lg relative overflow-hidden">
+                          {pdfDoc ? (
+                            <PdfPageThumbnail pdfDoc={pdfDoc} pageNum={pageNum} />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+                              <FileText className="w-6 h-6 text-white/20" />
+                              <span className="text-[9px] font-semibold text-white/40">{pageNum}</span>
+                            </div>
+                          )}
+                          <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-black/30 border-b border-l border-white/10 rounded-bl-sm z-10" />
+                        </div>
+                      </div>
+
+                      {/* Card Footer: position controls */}
+                      <div className="w-full flex flex-col items-center gap-1 mt-1 border-t border-white/[0.03] pt-1.5">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={e => { e.stopPropagation(); movePageTo(idx, idx - 1); }}
+                            disabled={idx === 0}
+                            className="p-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/15 disabled:opacity-25 disabled:cursor-not-allowed text-white/60 cursor-pointer transition-colors"
+                            title="Move earlier"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <ReorderPositionInput value={idx + 1} max={pageCount} onCommit={target => movePageTo(idx, target - 1)} />
+                          <button
+                            onClick={e => { e.stopPropagation(); movePageTo(idx, idx + 1); }}
+                            disabled={idx === order.length - 1}
+                            className="p-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/15 disabled:opacity-25 disabled:cursor-not-allowed text-white/60 cursor-pointer transition-colors"
+                            title="Move later"
+                          >
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-white/35">Page {pageNum}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-2">
                 {Array.from({ length: pageCount }, (_, i) => i + 1).map(pageNum => {
                   const isSelected = selectedPages.includes(pageNum);
@@ -909,6 +1107,7 @@ export default function PdfToolsPage({ defaultSub }: { defaultSub?: string } = {
                   );
                 })}
               </div>
+              )}
             </div>
           ) : (
             /* Standard Drop Zone */
