@@ -248,32 +248,104 @@ fn page_size_info(w: f64, h: f64) -> (String, String) {
 // Merge PDFs
 // ═══════════════════════════════════════
 
+fn collect_and_resolve_pages(
+    doc: &mut Document,
+    pages_id: ObjectId,
+    accumulated_resources: Option<Object>,
+    accumulated_mediabox: Option<Object>,
+    accumulated_cropbox: Option<Object>,
+    accumulated_rotate: Option<Object>,
+    pages: &mut Vec<(ObjectId, Object)>,
+) {
+    if let Ok(dict) = doc.get_object(pages_id).and_then(|obj| obj.as_dict()).map(|d| d.clone()) {
+        let local_resources = dict.get(b"Resources").ok().cloned().or(accumulated_resources);
+        let local_mediabox = dict.get(b"MediaBox").ok().cloned().or(accumulated_mediabox);
+        let local_cropbox = dict.get(b"CropBox").ok().cloned().or(accumulated_cropbox);
+        let local_rotate = dict.get(b"Rotate").ok().cloned().or(accumulated_rotate);
+
+        if let Ok(Object::Array(kids)) = dict.get(b"Kids") {
+            let kids = kids.clone();
+            for kid in kids {
+                if let Object::Reference(kid_id) = kid {
+                    if let Ok(Object::Dictionary(mut kid_dict)) = doc.get_object(kid_id).map(|obj| obj.clone()) {
+                        let type_name = kid_dict.get(b"Type").and_then(|o| o.as_name()).unwrap_or(b"");
+                        if type_name == b"Page" {
+                            if kid_dict.get(b"Resources").is_err() {
+                                if let Some(ref res) = local_resources {
+                                    kid_dict.set("Resources", res.clone());
+                                }
+                            }
+                            if kid_dict.get(b"MediaBox").is_err() {
+                                if let Some(ref mb) = local_mediabox {
+                                    kid_dict.set("MediaBox", mb.clone());
+                                }
+                            }
+                            if kid_dict.get(b"CropBox").is_err() {
+                                if let Some(ref cb) = local_cropbox {
+                                    kid_dict.set("CropBox", cb.clone());
+                                }
+                            }
+                            if kid_dict.get(b"Rotate").is_err() {
+                                if let Some(ref rot) = local_rotate {
+                                    kid_dict.set("Rotate", rot.clone());
+                                }
+                            }
+                            doc.objects.insert(kid_id, Object::Dictionary(kid_dict.clone()));
+                            pages.push((kid_id, Object::Dictionary(kid_dict)));
+                        } else if type_name == b"Pages" {
+                            collect_and_resolve_pages(
+                                doc,
+                                kid_id,
+                                local_resources.clone(),
+                                local_mediabox.clone(),
+                                local_cropbox.clone(),
+                                local_rotate.clone(),
+                                pages,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub fn merge_pdfs(input_paths: Vec<String>, output_path: String) -> Result<ToolResult, String> {
     if input_paths.is_empty() { return Err("No input files".into()); }
 
-    let mut documents_pages = BTreeMap::new();
+    let mut documents_pages = Vec::new();
     let mut documents_objects = BTreeMap::new();
     let mut document = Document::with_version("1.5");
     let mut max_id: u32 = 1;
-    let mut pagenum = 1u32;
+    let mut doc_page_counts = Vec::new();
 
     for path in &input_paths {
         let mut doc = open_doc(path)?;
-        let mut first = false;
         doc.renumber_objects_with(max_id);
         max_id = doc.max_id + 1;
 
-        documents_pages.extend(doc.get_pages().into_iter().filter_map(|(_, object_id)| {
-            if !first {
-                document.add_bookmark(
-                    Bookmark::new(format!("Page_{}", pagenum), [0.0, 0.0, 1.0], 0, object_id), None,
-                );
-                first = true;
-                pagenum += 1;
+        let mut doc_pages = Vec::new();
+        let mut pages_id = None;
+        if let Ok(catalog) = doc.catalog() {
+            if let Ok(Object::Reference(pid)) = catalog.get(b"Pages") {
+                pages_id = Some(*pid);
             }
-            doc.get_object(object_id).ok().map(|o| (object_id, o.to_owned()))
-        }));
+        }
+        if let Some(pid) = pages_id {
+            collect_and_resolve_pages(&mut doc, pid, None, None, None, None, &mut doc_pages);
+        }
+        if doc_pages.is_empty() {
+            let pages = doc.get_pages();
+            for (_, object_id) in pages {
+                if let Ok(o) = doc.get_object(object_id) {
+                    doc_pages.push((object_id, o.to_owned()));
+                }
+            }
+        }
+
+        doc_page_counts.push(doc_pages.len());
+        documents_pages.extend(doc_pages);
         documents_objects.extend(doc.objects);
     }
 
@@ -299,37 +371,70 @@ pub fn merge_pdfs(input_paths: Vec<String>, output_path: String) -> Result<ToolR
         }
     }
 
-    let pages_object = pages_object.ok_or("No Pages found")?;
-    let catalog_object = catalog_object.ok_or("No Catalog found")?;
+    let pages_id = pages_object.as_ref().map(|(id, _)| *id).unwrap_or_else(|| {
+        max_id += 1;
+        (max_id - 1, 0)
+    });
+    let catalog_id = catalog_object.as_ref().map(|(id, _)| *id).unwrap_or_else(|| {
+        max_id += 1;
+        (max_id - 1, 0)
+    });
 
-    for (object_id, object) in documents_pages.iter() {
+    for (object_id, object) in &documents_pages {
         if let Ok(dictionary) = object.as_dict() {
             let mut dictionary = dictionary.clone();
-            dictionary.set("Parent", pages_object.0);
+            dictionary.set("Parent", pages_id);
             document.objects.insert(*object_id, Object::Dictionary(dictionary));
         }
     }
 
-    if let Ok(dictionary) = pages_object.1.as_dict() {
-        let mut dictionary = dictionary.clone();
-        dictionary.set("Count", documents_pages.len() as u32);
-        dictionary.set("Kids", documents_pages.keys().map(|id| Object::Reference(*id)).collect::<Vec<_>>());
-        document.objects.insert(pages_object.0, Object::Dictionary(dictionary));
-    }
+    let mut pages_dict = pages_object
+        .and_then(|(_, obj)| obj.as_dict().ok().cloned())
+        .unwrap_or_else(|| {
+            let mut dict = lopdf::Dictionary::new();
+            dict.set("Type", Object::Name(b"Pages".to_vec()));
+            dict
+        });
+    pages_dict.remove(b"Parent"); // Ensure Root Pages node has NO Parent!
+    pages_dict.set("Count", documents_pages.len() as u32);
+    pages_dict.set("Kids", documents_pages.iter().map(|(id, _)| Object::Reference(*id)).collect::<Vec<_>>());
+    document.objects.insert(pages_id, Object::Dictionary(pages_dict));
 
-    if let Ok(dictionary) = catalog_object.1.as_dict() {
-        let mut dictionary = dictionary.clone();
-        dictionary.set("Pages", pages_object.0);
-        dictionary.remove(b"Outlines");
-        document.objects.insert(catalog_object.0, Object::Dictionary(dictionary));
-    }
+    let mut catalog_dict = catalog_object
+        .and_then(|(_, obj)| obj.as_dict().ok().cloned())
+        .unwrap_or_else(|| {
+            let mut dict = lopdf::Dictionary::new();
+            dict.set("Type", Object::Name(b"Catalog".to_vec()));
+            dict
+        });
+    catalog_dict.set("Pages", pages_id);
+    document.objects.insert(catalog_id, Object::Dictionary(catalog_dict));
 
-    document.trailer.set("Root", catalog_object.0);
+    document.trailer.set("Root", catalog_id);
     document.max_id = document.objects.len() as u32;
     document.renumber_objects();
     document.adjust_zero_pages();
+
+    // Add outline bookmarks referencing the final, correct page object IDs
+    let page_ids = collect_page_ids(&document);
+    let mut current_page_idx = 0;
+    for (i, path) in input_paths.iter().enumerate() {
+        let doc_page_count = doc_page_counts[i];
+        if current_page_idx < page_ids.len() {
+            let page_id = page_ids[current_page_idx];
+            let file_name = std::path::Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Document");
+            document.add_bookmark(
+                Bookmark::new(file_name.to_string(), [0.0, 0.0, 1.0], 0, page_id), None,
+            );
+        }
+        current_page_idx += doc_page_count;
+    }
+
     if let Some(n) = document.build_outline() {
-        if let Ok(Object::Dictionary(dict)) = document.get_object_mut(catalog_object.0) {
+        if let Ok(Object::Dictionary(dict)) = document.get_object_mut(catalog_id) {
             dict.set("Outlines", Object::Reference(n));
         }
     }
@@ -931,6 +1036,47 @@ mod tests {
         assert!(r.message.contains("file_size"));
     }
 
+    fn create_test_pdf_nested_with_inheritance() -> tempfile::NamedTempFile {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let mut doc = Document::with_version("1.5");
+        
+        let page_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Page".to_vec()),
+        }));
+        
+        let inter_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Pages".to_vec()),
+            b"Count" => Object::Integer(1),
+            b"Kids" => Object::Array(vec![Object::Reference(page_id)]),
+        }));
+        
+        let tree_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Pages".to_vec()),
+            b"Count" => Object::Integer(1),
+            b"Kids" => Object::Array(vec![Object::Reference(inter_id)]),
+            b"MediaBox" => Object::Array(vec![
+                Object::Real(0.0), Object::Real(0.0),
+                Object::Real(500.0), Object::Real(600.0),
+            ]),
+        }));
+        
+        let catalog_id = doc.add_object(Object::Dictionary(dictionary! {
+            b"Type" => Object::Name(b"Catalog".to_vec()),
+            b"Pages" => Object::Reference(tree_id),
+        }));
+        
+        if let Ok(Object::Dictionary(ref mut d)) = doc.get_object_mut(page_id) {
+            d.set("Parent", Object::Reference(inter_id));
+        }
+        if let Ok(Object::Dictionary(ref mut d)) = doc.get_object_mut(inter_id) {
+            d.set("Parent", Object::Reference(tree_id));
+        }
+        
+        doc.trailer.set("Root", catalog_id);
+        doc.save(file.path()).unwrap();
+        file
+    }
+
     #[test]
     fn test_merge_pdfs() {
         let f1 = create_test_pdf();
@@ -945,6 +1091,34 @@ mod tests {
         // Verify output is valid
         let merged = open_doc(out.path().to_str().unwrap()).unwrap();
         assert_eq!(merged.get_pages().len(), 2);
+    }
+
+    #[test]
+    fn test_merge_pdfs_nested_tree_and_inheritance() {
+        let f1 = create_test_pdf_nested_with_inheritance();
+        let f2 = create_test_pdf_nested_with_inheritance();
+        let out = tempfile::NamedTempFile::new().unwrap();
+        let r = merge_pdfs(
+            vec![f1.path().to_str().unwrap().to_string(), f2.path().to_str().unwrap().to_string()],
+            out.path().to_str().unwrap().to_string(),
+        ).unwrap();
+        assert!(r.success);
+        assert!(r.message.contains("2 files"));
+        
+        // Verify output is valid
+        let merged = open_doc(out.path().to_str().unwrap()).unwrap();
+        let pages = merged.get_pages();
+        assert_eq!(pages.len(), 2);
+        
+        // Verify that MediaBox has been correctly resolved and copied down to the leaf pages
+        for (_, &page_id) in pages.iter() {
+            let page_obj = merged.get_object(page_id).unwrap();
+            let page_dict = page_obj.as_dict().unwrap();
+            let mb = page_dict.get(b"MediaBox").unwrap().as_array().unwrap();
+            assert_eq!(mb.len(), 4);
+            assert_eq!(obj_to_f64(&mb[2]), Some(500.0));
+            assert_eq!(obj_to_f64(&mb[3]), Some(600.0));
+        }
     }
 
     #[test]

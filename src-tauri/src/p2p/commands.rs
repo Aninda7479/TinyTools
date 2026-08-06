@@ -200,8 +200,9 @@ pub fn cleanup() -> Result<(), String> {
 
 #[tauri::command]
 pub fn reveal_in_folder(path: String) -> Result<(), String> {
+    let normalized = path.replace('/', "\\");
     let _ = std::process::Command::new("explorer")
-        .args(["/select,", &path])
+        .args(["/select,", &normalized])
         .spawn()
         .map_err(|e| format!("Failed to open folder: {}", e))?;
     Ok(())
