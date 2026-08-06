@@ -11,4 +11,3 @@ crates/image-core/target/
 Thumbs.db
 graphify-out
 tests/
-src-wasm/target/

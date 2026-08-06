@@ -284,7 +284,7 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
       description="Local AI-powered image processing"
       onProcess={handleProcess}
       processLabel="Run AI Tool"
-      allowWeb={selectedTool === "bg-remove" || selectedTool === "inpaint"}
+      allowWeb={true}
       renderPreview={selectedTool === "inpaint" ? (f) => (
         <BoundingBoxSelector src={f.path} onChange={(r) => setInpaintRegions([r])} />
       ) : undefined}

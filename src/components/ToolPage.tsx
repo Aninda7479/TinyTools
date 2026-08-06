@@ -83,11 +83,24 @@ export default function ToolPage({
   const webBlocked = !isTauri() && !allowWeb;
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      <div>
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <p className="text-sm text-white/40 mt-1">{description}</p>
-      </div>
+    <div className="relative h-full flex flex-col">
+      {!isTauri() && !allowWeb && (
+        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-2xl border border-red-500/20 p-8 text-center">
+          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+            <MonitorDown className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Desktop App Required</h2>
+          <p className="text-sm text-white/60 max-w-md">
+            This tool requires the TinyTools native Rust backend to process files securely and efficiently. Please use the Desktop app to access this feature.
+          </p>
+        </div>
+      )}
+
+      <div className={`flex flex-col h-full gap-4 ${!isTauri() && !allowWeb ? "opacity-20 pointer-events-none select-none" : ""}`}>
+        <div>
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <p className="text-sm text-white/40 mt-1">{description}</p>
+        </div>
 
       {webBlocked && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-2xl border border-red-500/20 p-8 text-center">
@@ -128,26 +141,35 @@ export default function ToolPage({
               onChange={handleWebFileSelect}
             />
             {files.length > 0 ? (
-              <div className={`flex gap-3 flex-wrap w-full ${multiFile ? "" : ""}`}>
-                {files.map((f, i) => (
-                  <div key={i} className={`relative group flex flex-col items-center ${renderPreview ? 'w-full h-full' : ''}`}>
-                    {renderPreview ? (
-                      renderPreview(f)
-                    ) : (
-                      <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
-                        {f.name}
-                      </div>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
-                      className="absolute -top-1 -right-1 w-5 h-5 z-10 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    {!renderPreview && <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>}
-                  </div>
-                ))}
-              </div>
+              previewNode ? previewNode : (
+                <div className={`flex gap-3 flex-wrap w-full ${multiFile ? "" : ""}`}>
+                  {files.map((f, i) => (
+                    <div key={i} className={`relative group flex flex-col items-center ${renderPreview ? 'w-full h-full' : ''}`}>
+                      {renderPreview ? (
+                        renderPreview(f)
+                      ) : (
+                        <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
+                          {f.name}
+                        </div>
+                      )}
+                      <button
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setFiles((p) => {
+                            const updated = p.filter((_, j) => j !== i);
+                            onFilesChange?.(updated);
+                            return updated;
+                          }); 
+                        }}
+                        className="absolute -top-1 -right-1 w-5 h-5 z-10 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      {!renderPreview && <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>}
+                    </div>
+                  ))}
+                </div>
+              )
             ) : (
               <>
                 <Upload className="w-8 h-8 text-white/30" />
@@ -161,19 +183,32 @@ export default function ToolPage({
           {previewNode}
 
           {files.length > 0 && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={spring}
-              onClick={() => onProcess(files)}
-              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
-            >
-              <Play className="w-4 h-4" />
-              {processLabel || `Process ${files.length} file${files.length > 1 ? "s" : ""}`}
-            </motion.button>
+            <div className="flex gap-2">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={spring}
+                onClick={() => onProcess(files)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+              >
+                <Play className="w-4 h-4" />
+                {processLabel || `Process ${files.length} file${files.length > 1 ? "s" : ""}`}
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={spring}
+                onClick={() => { setFiles([]); onFilesChange?.([]); }}
+                className="px-6 flex items-center justify-center py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                title="Reset Image"
+              >
+                <X className="w-4 h-4" />
+              </motion.button>
+            </div>
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

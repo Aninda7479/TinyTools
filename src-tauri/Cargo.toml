@@ -57,6 +57,7 @@ tokio-stream = "0.1"
 local-ip-address = "0.6"
 dirs-next = "2"
 igd-next = { version = "0.15", features = ["aio_tokio"] }
+img-parts = "0.4.0"
 
 [profile.dev]
 debug = false
