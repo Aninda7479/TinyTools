@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import {
-  Sparkles, Brain, Shield, Scissors, Image, Image as ImageIcon, RefreshCw, QrCode,
+  Brain, Shield, Scissors, Image, Image as ImageIcon, RefreshCw, QrCode,
   Wand2, Layers, FileText, Key, Binary, Hash, Lock, Radio,
   Paintbrush, Minimize, FileUp, Stamp, ArrowUpDown, RotateCw, Crop,
   Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
