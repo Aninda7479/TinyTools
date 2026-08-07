@@ -5,6 +5,7 @@ import { isTauri } from "../lib/tauri";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
+import { version as packageVersion } from "../../package.json";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 const containerVariants = {
@@ -22,7 +23,7 @@ const itemVariants = {
 };
 
 export default function AboutPage() {
-  const [currentVersion, setCurrentVersion] = useState("0.2.0");
+  const [currentVersion, setCurrentVersion] = useState(packageVersion);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [status, setStatus] = useState<"idle" | "checking" | "available" | "up-to-date" | "downloading" | "downloaded" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -236,13 +237,24 @@ export default function AboutPage() {
               </div>
             )}
             
-            {/* Show update info if available */}
-            {status === "available" && updateInfo && (
-              <div className="text-[10px] text-white/40 flex flex-col gap-1">
-                <span>Latest Version: v{updateInfo.version}</span>
-                {updateInfo.date && <span>Released: {new Date(updateInfo.date).toLocaleDateString()}</span>}
+            {/* Version Information */}
+            <div className="flex items-center justify-between border-t border-white/5 pt-2 text-[10px] text-white/40">
+              <div className="flex flex-col">
+                <span className="text-white/25 text-[8px] uppercase tracking-wider font-semibold">Installed Version</span>
+                <span className="font-mono text-white/60">v{currentVersion}</span>
               </div>
-            )}
+              <div className="flex flex-col items-end">
+                <span className="text-white/25 text-[8px] uppercase tracking-wider font-semibold">Latest Available</span>
+                <span className="font-mono text-white/60">
+                  {status === "checking" ? "Checking..." : 
+                   status === "available" ? `v${updateInfo?.version}` : 
+                   status === "up-to-date" ? `v${currentVersion}` : 
+                   status === "downloaded" ? `v${updateInfo?.version}` : 
+                   status === "downloading" ? `v${updateInfo?.version}` : 
+                   "Unknown (Check required)"}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
