@@ -37,17 +37,28 @@ for (const file of files) {
     const url = `https://github.com/${repo}/releases/download/v${version}/${targetFile}`;
 
     let platform = '';
-    if (file.includes('aarch64') && (file.includes('tar.gz') || file.includes('app') || file.includes('dmg'))) {
+    const lowerFile = file.toLowerCase();
+
+    // 1. macOS Apple Silicon (built on macos-latest runner which is ARM64 by default)
+    if (lowerFile.includes('aarch64') || lowerFile.includes('arm64') || (lowerFile.includes('tinytools.app.tar.gz') && !lowerFile.includes('x64') && !lowerFile.includes('x86_64'))) {
       platform = 'darwin-aarch64';
-    } else if ((file.includes('x64') || file.includes('x86_64')) && (file.includes('tar.gz') || file.includes('app') || file.includes('dmg'))) {
+    } 
+    // 2. macOS Intel x64
+    else if ((lowerFile.includes('x64') || lowerFile.includes('x86_64')) && (lowerFile.includes('tar.gz') || lowerFile.includes('app') || lowerFile.includes('dmg')) && (lowerFile.includes('darwin') || lowerFile.includes('macos'))) {
       platform = 'darwin-x86_64';
-    } else if (file.includes('amd64') && (file.includes('AppImage') || file.includes('deb') || file.includes('tar.gz'))) {
-      platform = 'linux-x86_64';
-    } else if ((file.includes('x64') || file.includes('x86_64')) && file.includes('zip')) {
+    } 
+    // 3. Windows x64 (matches .msi, .exe, or .zip installers)
+    else if ((lowerFile.includes('x64') || lowerFile.includes('x86_64')) && (lowerFile.includes('zip') || lowerFile.includes('msi') || lowerFile.includes('exe'))) {
       platform = 'windows-x86_64';
+    } 
+    // 4. Linux x64 (matches .AppImage, .deb, or .tar.gz installers)
+    else if ((lowerFile.includes('amd64') || lowerFile.includes('x86_64') || lowerFile.includes('x64')) && (lowerFile.includes('appimage') || lowerFile.includes('deb') || lowerFile.includes('tar.gz'))) {
+      platform = 'linux-x86_64';
     }
 
     if (platform) {
+      // Prioritize .msi over .exe for Windows updater, or just assign whatever matches
+      // Tauri updater will use the matched platform url
       updater.platforms[platform] = {
         signature: sigContent,
         url: url
