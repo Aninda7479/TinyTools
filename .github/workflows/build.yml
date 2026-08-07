@@ -2,11 +2,57 @@ name: Build & Release
 
 on:
   push:
-    tags: ["v*"]
+    branches:
+      - release
   workflow_dispatch:
+    inputs:
+      bump_override:
+        description: 'Manual version bump override'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (!contains(github.event.head_commit.message, '[skip ci]') &&
+       github.actor != 'github-actions[bot]')
+    outputs:
+      new_version: ${{ steps.compute.outputs.new_version }}
+      tag_name: ${{ steps.compute.outputs.tag_name }}
+      bump_type: ${{ steps.compute.outputs.bump_type }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Compute Next Version
+        id: compute
+        env:
+          BUMP_OVERRIDE: ${{ inputs.bump_override || 'auto' }}
+        run: node scripts/compute-next-version.cjs
+
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +73,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+
+      - name: Apply version in working tree
+        run: node scripts/apply-version.cjs ${{ needs.version.outputs.new_version }}
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -49,6 +98,18 @@ jobs:
         with:
           tauriScript: "npx tauri"
 
+      - name: Package Homelab Server Binary
+        shell: bash
+        run: |
+          VERSION="${{ needs.version.outputs.new_version }}"
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            powershell -Command "Compress-Archive -Path src-tauri/target/release/tinytools.exe -DestinationPath src-tauri/target/release/tinytools-server-v${VERSION}-windows-x64.zip -Force"
+          elif [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+            tar -czf src-tauri/target/release/tinytools-server-v${VERSION}-linux-x64.tar.gz -C src-tauri/target/release tinytools
+          elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            zip -j src-tauri/target/release/tinytools-server-v${VERSION}-macos-arm64.zip src-tauri/target/release/tinytools
+          fi
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -60,14 +121,36 @@ jobs:
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.app
+            src-tauri/target/release/tinytools-server-v*.zip
+            src-tauri/target/release/tinytools-server-v*.tar.gz
 
   release:
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: release
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Apply version in working tree
+        run: node scripts/apply-version.cjs ${{ needs.version.outputs.new_version }}
+
+      - name: Commit and Push Version Bump
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git commit -m "chore(release): bump version to ${{ needs.version.outputs.new_version }} [skip ci]"
+          git tag ${{ needs.version.outputs.tag_name }}
+          git push origin release
+          git push origin ${{ needs.version.outputs.tag_name }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -78,6 +161,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag_name }}
+          name: Release ${{ needs.version.outputs.tag_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
