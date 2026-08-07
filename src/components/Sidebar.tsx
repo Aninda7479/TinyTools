@@ -206,9 +206,16 @@ const categoryIds = new Set(sidebarCategories.map((c) => c.id));
 export default function Sidebar({ activeTool, onToolSelect }: SidebarProps) {
   return (
     <aside className="w-16 flex flex-col items-center py-4 gap-1.5 border-r border-border bg-surface/50 backdrop-blur-xl">
-      {/* <div className="flex items-center justify-center w-10 h-10 mb-3">
-        <Sparkles className="w-5 h-5 text-blue-400" />
-      </div> */}
+      <motion.div 
+        className="flex items-center justify-center w-10 h-10 mb-3 cursor-pointer"
+        onClick={() => onToolSelect("welcome")}
+        whileHover={{ scale: 1.1, rotate: 10 }}
+        whileTap={{ scale: 0.9 }}
+        transition={spring}
+        title="TinyTools Home"
+      >
+        <img src="/logo.svg" className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(36,200,250,0.25)]" alt="Logo" />
+      </motion.div>
 
       {sidebarCategories.map((cat) => {
         const Icon = cat.icon;
@@ -237,7 +244,7 @@ export default function Sidebar({ activeTool, onToolSelect }: SidebarProps) {
       })}
 
       <div className="mt-auto flex flex-col gap-1.5">
-        <motion.button
+        {/* <motion.button
           onClick={() => onToolSelect("welcome")}
           className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
             activeTool === "welcome" ? "bg-white/10 text-white" : "text-white/50 hover:text-white/80 hover:bg-white/5"
@@ -248,7 +255,7 @@ export default function Sidebar({ activeTool, onToolSelect }: SidebarProps) {
           title="Home"
         >
           <Sparkles className="w-5 h-5" />
-        </motion.button>
+        </motion.button> */}
 
         <motion.button
           onClick={() => onToolSelect("about")}

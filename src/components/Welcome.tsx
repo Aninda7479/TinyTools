@@ -183,6 +183,29 @@ export default function Welcome({ onNavigate }: { onNavigate: (tool: Tool, sub?:
 
   return (
     <div className="flex flex-col h-full">
+      {!query && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={spring}
+          className="flex flex-col items-center justify-center pt-4 pb-6 gap-2 text-center shrink-0"
+        >
+          <motion.img 
+            src="/logo.svg" 
+            className="w-16 h-16 object-contain drop-shadow-[0_0_15px_rgba(36,200,250,0.35)]" 
+            alt="TinyTools Logo"
+            whileHover={{ scale: 1.08, rotate: 5 }}
+            transition={spring}
+          />
+          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
+            TinyTools
+          </h1>
+          <p className="text-xs text-white/40 max-w-sm">
+            A fast, secure, local utility suite. Your data never leaves your machine.
+          </p>
+        </motion.div>
+      )}
+
       <div className="relative flex w-full max-w-sm mx-auto pb-2">
         <Search className="absolute ml-3 mt-3 w-4 h-4 text-white/90 pointer-events-none z-10" />
         <input

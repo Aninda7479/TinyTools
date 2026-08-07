@@ -138,9 +138,16 @@ export default function AboutPage() {
           </div>
           
           <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2" style={{ color: '#ffffff' }}>
-              TinyTools
-            </h1>
+            <div className="flex items-center gap-3.5 mb-2">
+              <img 
+                src="/logo.svg" 
+                className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(36,200,250,0.3)]" 
+                alt="TinyTools Logo" 
+              />
+              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white" style={{ color: '#ffffff' }}>
+                TinyTools
+              </h1>
+            </div>
             <p className="text-sm md:text-base text-white/70 leading-relaxed" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
               A secure utility workspace built to run entirely on your device.
               Process your images, videos, PDFs, and text locally without sending a single byte online.
@@ -344,7 +351,7 @@ export default function AboutPage() {
             </h2>
             
             <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shrink-0">
                 A
               </div>
               <div>
