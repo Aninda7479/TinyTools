@@ -53,8 +53,21 @@ export default function AboutPage() {
       }
     } catch (err: any) {
       console.error(err);
-      setStatus("error");
-      setErrorMsg(err?.message || "Failed to check for updates. Make sure you are online.");
+      const errMsg = err?.message || String(err);
+      const lowerMsg = errMsg.toLowerCase();
+      
+      // If the updater manifest is not found (404) or the current platform is not in the release map,
+      // it means there is no update available for this device. Treat it as up-to-date.
+      if (
+        lowerMsg.includes("platform not found") || 
+        lowerMsg.includes("404") || 
+        lowerMsg.includes("not found")
+      ) {
+        setStatus("up-to-date");
+      } else {
+        setStatus("error");
+        setErrorMsg(errMsg || "Failed to check for updates. Make sure you are online.");
+      }
     }
   };
 
