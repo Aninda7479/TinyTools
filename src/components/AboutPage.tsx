@@ -59,7 +59,8 @@ export default function AboutPage() {
       // If the updater manifest is not found (404) or the current platform is not in the release map,
       // it means there is no update available for this device. Treat it as up-to-date.
       if (
-        lowerMsg.includes("platform not found") || 
+        lowerMsg.includes("platform") || 
+        lowerMsg.includes("none of") || 
         lowerMsg.includes("404") || 
         lowerMsg.includes("not found")
       ) {
