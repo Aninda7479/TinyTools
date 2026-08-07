@@ -23,6 +23,11 @@ import GlobalReceivePage from "./components/GlobalReceivePage";
 import VideoToolsPage from "./components/VideoToolsPage";
 import AboutPage from "./components/AboutPage";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ScientificCalculator from "./components/ScientificCalculator";
+import GraphCalculator from "./components/GraphCalculator";
+import TimeCalculator from "./components/TimeCalculator";
+import UnitCalculator from "./components/UnitCalculator";
+import EquationCalculator from "./components/EquationCalculator";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -77,6 +82,11 @@ function AppInner() {
       case "global-receive": return <GlobalReceivePage key="global-receive" />;
       case "video": return <VideoToolsPage key="video" defaultSub={activeSub} />;
       case "about": return <AboutPage key="about" />;
+      case "calc-sci": return <ScientificCalculator key="calc-sci" />;
+      case "calc-graph": return <GraphCalculator key="calc-graph" />;
+      case "calc-time": return <TimeCalculator key="calc-time" />;
+      case "calc-unit": return <UnitCalculator key="calc-unit" />;
+      case "calc-equation": return <EquationCalculator key="calc-equation" />;
       default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }
   };

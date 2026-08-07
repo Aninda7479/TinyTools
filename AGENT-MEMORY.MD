@@ -34,7 +34,7 @@ Wire: Manifest JSON (file_name, size, salt, hmac) → Chunks `[4B len][12B nonce
 ## Frontend (`src/`)
 
 ### Routing (`App.tsx`)
-- `handleNavigate(tool, sub?)` — tools: `image`, `ai`, `privacy`, `editing`, `conversion`, `p2p`, `pdf`, `encryption`, `password`, `encoder`, `hasher`, `qr`, `welcome`
+- `handleNavigate(tool, sub?)` — tools: `image`, `ai`, `privacy`, `editing`, `conversion`, `p2p`, `pdf`, `encryption`, `password`, `encoder`, `hasher`, `qr`, `calc-sci`, `calc-graph`, `calc-time`, `calc-unit`, `welcome`
 - Sub-tool IDs must match page types exactly (e.g. `"smart-sharpen"` not `"sharpen"`)
 
 ### Key Pages
@@ -43,9 +43,17 @@ Wire: Manifest JSON (file_name, size, salt, hmac) → Chunks `[4B len][12B nonce
 - **QrGenerator.tsx** — input type tabs (URL/Text/Wi-Fi/vCard/Email) with dynamic forms; 6 theme presets with labels; contrast scannability badge; preview bg toggles (light/dark/checkerboard); logo BG padding slider; dynamic PNG button showing pixel dimensions.
 - **EncryptionPage.tsx** — auto-process (300ms debounce), passphrase toggle + entropy meter, encoding/format selectors, XOR toggle, metadata badge, file dropzone, revealInFolder.
 - **P2PPage / P2PPeerList / P2PTransferProgress / P2PWebPortal** — 3-tab P2P UI.
-- **Welcome.tsx** — 7 sections, 42 feature cards with search.
-- **Sidebar.tsx** — 7 icons, `sidebarCategories`, `"cat-*"` tool type union.
+- **Welcome.tsx** — 8 sections, 46 feature cards with search.
+- **Sidebar.tsx** — 9 icons, `sidebarCategories`, `"cat-*"` tool type union (incl. `cat-calculator`).
 - **CategoryPage.tsx** — grouped feature grid per category.
+- **ScientificCalculator.tsx** — live-eval keypad, DEG/RAD, history, expression builder (uses `calc-engine`).
+- **GraphCalculator.tsx** — canvas y=f(x) plotting, pan/zoom/trace, multi-function colors (uses `calc-engine`).
+- **TimeCalculator.tsx** — 3 tabs: duration between times, add/subtract, convert (uses `calc-units` time category).
+- **UnitCalculator.tsx** — 13 unit categories, live converter + all-units table (uses `calc-units`).
+
+### `lib/` calculator engines
+- **calc-engine.ts** — recursive-descent parser (`evalExpression`, `tryEval`, `formatNumber`). Supports + − * / % ^, implicit multiplication (`2x`, `2(x+1)`), functions (sin/cos/tan/inverse/hyperbolic/ln/log/log2/sqrt/cbrt/abs/floor/ceil/round/exp/sign/min/max), constants (pi/e/tau/phi/inf), `|x|`, factorial `n!` (gamma for non-integers), variables (graph uses `x`), `degrees` option for trig.
+- **calc-units.ts** — `unitCategories` (13 cats) + `convertValue`/`toBase`/`fromBase`/`formatUnitValue`. Linear factors with affine `offset` for temperature.
 
 ### `lib/`
 - **tauri.ts** — IPC bridge for all commands. Uses `@tauri-apps/plugin-dialog` for file pickers (Tauri 2 `<input>` has no `.path`). `processImage(params?)` accepts JSON-stringified params.

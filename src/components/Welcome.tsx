@@ -8,6 +8,7 @@ import {
   Gauge, Zap, SplitSquareHorizontal, Combine, ChevronRight, Palette,
   ShieldCheck, FileLock, Film, Merge, VolumeX, Volume2, Globe,
   Image as ImageIcon, Subtitles, Download,
+  Calculator, Activity, Clock, Ruler, Sigma,
 } from "lucide-react";
 import type { Tool } from "./Sidebar";
 import { searchFeatures } from "../lib/search";
@@ -156,6 +157,17 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
       { icon: Download, title: "Global Receive", tag: "P2P", tool: "global-receive", keywords: "global receive p2p direct webrtc internet world wide receive" },
       { icon: QrCode, title: "Local Web Portal Send", tag: "Network", tool: "portal-send", keywords: "local web portal send share file qr code download browser" },
       { icon: Download, title: "Local Web Portal Receive", tag: "Network", tool: "portal-receive", keywords: "local web portal receive upload incoming file accept" },
+    ],
+  },
+  {
+    label: "Calculator",
+    icon: Calculator,
+    features: [
+      { icon: Calculator, title: "Scientific Calculator", tag: "Math", tool: "calc-sci", keywords: "scientific calculator trig sin cos tan log sqrt algebra expression math" },
+      { icon: Activity, title: "Graph Calculator", tag: "Math", tool: "calc-graph", keywords: "graph plot function equation 2d curve plotting x y visualize" },
+      { icon: Clock, title: "Time Calculator", tag: "Math", tool: "calc-time", keywords: "time duration add subtract convert hours minutes seconds elapsed" },
+      { icon: Ruler, title: "Unit Calculator", tag: "Math", tool: "calc-unit", keywords: "unit converter length weight temperature area volume speed data convert" },
+      { icon: Sigma, title: "Equation Calculator", tag: "Math", tool: "calc-equation", keywords: "equation solve quadratic linear system roots formula discriminant cramer substitution math" },
     ],
   },
 ];

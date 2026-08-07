@@ -6,6 +6,7 @@ import {
   Trash2, ImagePlus, Unlock, Minimize2, Info, Eye,
   Gauge, Zap, SplitSquareHorizontal, Combine, Palette,
   ShieldCheck, FileLock, Film, Merge, Volume2, Download, Globe,
+  Calculator, Activity, Clock, Ruler, Sigma,
 } from "lucide-react";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
@@ -18,7 +19,8 @@ export type Tool =
   | "encoder" | "hasher"
   | "portal-send" | "portal-receive" | "video"
   | "global-share" | "global-receive"
-  | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share" | "cat-video";
+  | "calc-sci" | "calc-graph" | "calc-time" | "calc-unit" | "calc-equation"
+  | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share" | "cat-video" | "cat-calculator";
 
 export interface Feature {
   icon: typeof Brain;
@@ -176,6 +178,18 @@ export const sidebarCategories: SidebarCategory[] = [
       { icon: Download, title: "Global Receive", tag: "P2P", tool: "global-receive" },
       { icon: QrCode, title: "Local Web Portal Send", tag: "Network", tool: "portal-send" },
       { icon: Download, title: "Local Web Portal Receive", tag: "Network", tool: "portal-receive" },
+    ],
+  },
+  {
+    id: "cat-calculator",
+    icon: Calculator,
+    label: "Calculator",
+    features: [
+      { icon: Calculator, title: "Scientific Calculator", tag: "Math", tool: "calc-sci" },
+      { icon: Activity, title: "Graph Calculator", tag: "Math", tool: "calc-graph" },
+      { icon: Clock, title: "Time Calculator", tag: "Math", tool: "calc-time" },
+      { icon: Ruler, title: "Unit Calculator", tag: "Math", tool: "calc-unit" },
+      { icon: Sigma, title: "Equation Calculator", tag: "Math", tool: "calc-equation" },
     ],
   },
 ];
