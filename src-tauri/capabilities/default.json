@@ -13,7 +13,7 @@
     "fs:allow-write-text-file",
     "dialog:default",
     "updater:default",
-    "process:allow-relaunch",
+    "process:allow-restart",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]
