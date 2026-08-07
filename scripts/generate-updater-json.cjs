@@ -23,17 +23,40 @@ const updater = {
 };
 
 const repo = 'Aninda7479/TinyTools';
-const files = fs.readdirSync(artifactsDir);
 
-for (const file of files) {
+// Helper function to recursively find all files in a directory
+const getAllFiles = (dir, fileList = []) => {
+  const files = fs.readdirSync(dir);
+  for (const file of files) {
+    const filePath = path.join(dir, file);
+    if (fs.statSync(filePath).isDirectory()) {
+      getAllFiles(filePath, fileList);
+    } else {
+      fileList.push(filePath);
+    }
+  }
+  return fileList;
+};
+
+const allFilePaths = getAllFiles(artifactsDir);
+const fileMap = {}; // Maps basename to full path
+
+for (const filePath of allFilePaths) {
+  fileMap[path.basename(filePath)] = filePath;
+}
+
+const filenames = Object.keys(fileMap);
+console.log(`Found ${filenames.length} files in artifacts directory (including nested folders).`);
+
+for (const file of filenames) {
   if (file.endsWith('.sig')) {
     const targetFile = file.slice(0, -4); // Remove .sig
-    if (!files.includes(targetFile)) {
+    if (!filenames.includes(targetFile)) {
       console.warn(`Signature file found but target file does not exist: ${file} -> ${targetFile}`);
       continue;
     }
 
-    const sigContent = fs.readFileSync(path.join(artifactsDir, file), 'utf8').trim();
+    const sigContent = fs.readFileSync(fileMap[file], 'utf8').trim();
     const url = `https://github.com/${repo}/releases/download/v${version}/${targetFile}`;
 
     let platform = '';
@@ -57,8 +80,6 @@ for (const file of files) {
     }
 
     if (platform) {
-      // Prioritize .msi over .exe for Windows updater, or just assign whatever matches
-      // Tauri updater will use the matched platform url
       updater.platforms[platform] = {
         signature: sigContent,
         url: url
