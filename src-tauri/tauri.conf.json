@@ -45,7 +45,7 @@
       "open": true
     },
     "updater": {
-      "pubkey": "YOUR_TAURI_KEY_HERE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCOUFFOUE0Qjg5RkNCNzcKUldSM3k1KzRwT21hT3dXY1Y5V3pPNy9Pd0JkMGhjcUYrY3k1aTI5NTNwODFDOHArYllhd2FxaHEK",
       "endpoints": [
         "https://github.com/Aninda7479/TinyTools/releases/latest/download/updater.json"
       ]
