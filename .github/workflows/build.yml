@@ -103,11 +103,11 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.new_version }}"
           if [ "${{ matrix.platform }}" = "windows-latest" ]; then
-            powershell -Command "Compress-Archive -Path src-tauri/target/release/tinytools.exe -DestinationPath src-tauri/target/release/tinytools-server-v${VERSION}-windows-x64.zip -Force"
+            powershell -Command "Compress-Archive -Path target/release/tinytools.exe -DestinationPath target/release/tinytools-server-v${VERSION}-windows-x64.zip -Force"
           elif [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            tar -czf src-tauri/target/release/tinytools-server-v${VERSION}-linux-x64.tar.gz -C src-tauri/target/release tinytools
+            tar -czf target/release/tinytools-server-v${VERSION}-linux-x64.tar.gz -C target/release tinytools
           elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
-            zip -j src-tauri/target/release/tinytools-server-v${VERSION}-macos-arm64.zip src-tauri/target/release/tinytools
+            zip -j target/release/tinytools-server-v${VERSION}-macos-arm64.zip target/release/tinytools
           fi
 
       - name: Upload artifacts
@@ -115,14 +115,14 @@ jobs:
         with:
           name: build-${{ matrix.platform }}
           path: |
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.app
-            src-tauri/target/release/tinytools-server-v*.zip
-            src-tauri/target/release/tinytools-server-v*.tar.gz
+            target/release/bundle/**/*.msi
+            target/release/bundle/**/*.exe
+            target/release/bundle/**/*.deb
+            target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.dmg
+            target/release/bundle/**/*.app
+            target/release/tinytools-server-v*.zip
+            target/release/tinytools-server-v*.tar.gz
 
   release:
     needs: [version, build]
