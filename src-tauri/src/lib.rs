@@ -1,4 +1,5 @@
 mod commands;
+pub mod chat;
 pub mod p2p;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -119,6 +120,10 @@ pub fn run() {
             p2p::commands::reject_transfer,
             p2p::commands::cleanup,
             p2p::commands::reveal_in_folder,
+            // E2EE LAN Chat
+            chat::commands::start_chat_room,
+            chat::commands::stop_chat_room,
+            chat::commands::get_chat_room_status,
             // Video Tools
             commands::video_tools::get_video_info,
             commands::video_tools::compress_video,
@@ -151,6 +156,14 @@ pub fn run_homelab() {
             .map(|ip| ip.to_string())
             .unwrap_or_else(|_| "127.0.0.1".to_string());
 
+        let (chat_password, _) = match chat::server::ensure_homelab_room() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Failed to start chat room: {}", e);
+                return;
+            }
+        };
+
         let (port, handle) = match p2p::server::start_homelab_server(&local_ip).await {
             Ok(result) => result,
             Err(e) => {
@@ -164,6 +177,8 @@ pub fn run_homelab() {
         println!("  TinyTools Homelab Mode");
         println!("  URL: {}", url);
         println!("  LAN: https://{}:{}", local_ip, port);
+        println!("  Chat: https://{}:{}/chat", local_ip, port);
+        println!("  Chat password: {}", chat_password);
         println!("  Press Ctrl+C to stop");
         println!("========================================\n");
 

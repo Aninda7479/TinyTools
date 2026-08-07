@@ -20,6 +20,7 @@ import P2PSendPage from "./components/P2PSendPage";
 import P2PReceivePage from "./components/P2PReceivePage";
 import GlobalSharePage from "./components/GlobalSharePage";
 import GlobalReceivePage from "./components/GlobalReceivePage";
+import LanChatPage from "./components/LanChatPage";
 import VideoToolsPage from "./components/VideoToolsPage";
 import AboutPage from "./components/AboutPage";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -80,6 +81,7 @@ function AppInner() {
       case "portal-receive": return <P2PReceivePage key="portal-receive" />;
       case "global-share": return <GlobalSharePage key="global-share" />;
       case "global-receive": return <GlobalReceivePage key="global-receive" />;
+      case "lan-chat": return <LanChatPage key="lan-chat" />;
       case "video": return <VideoToolsPage key="video" defaultSub={activeSub} />;
       case "about": return <AboutPage key="about" />;
       case "calc-sci": return <ScientificCalculator key="calc-sci" />;

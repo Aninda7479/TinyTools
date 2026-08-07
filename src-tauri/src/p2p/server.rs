@@ -16,6 +16,10 @@ use std::path::PathBuf;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use tower_http::services::ServeDir;
 
+fn install_tls_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 #[derive(Clone)]
 pub struct ServerState {
     pub transfers: Arc<Mutex<HashMap<String, PortalTransfer>>>,
@@ -569,6 +573,7 @@ pub async fn start_server(
     state: ServerState,
     local_ip: &str,
 ) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
+    install_tls_provider();
     let listener = std::net::TcpListener::bind("0.0.0.0:0")
         .map_err(|e| format!("Failed to bind server: {}", e))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -633,6 +638,7 @@ async fn spa_fallback() -> Html<String> {
 pub async fn start_homelab_server(
     local_ip: &str,
 ) -> Result<(u16, tokio::task::JoinHandle<()>), String> {
+    install_tls_provider();
     let listener = std::net::TcpListener::bind("0.0.0.0:0")
         .map_err(|e| format!("Failed to bind server: {}", e))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -673,6 +679,10 @@ pub async fn start_homelab_server(
         .route("/receive", get(receive_page))
         .nest_service("/assets", ServeDir::new("dist/assets"))
         .fallback(spa_fallback)
+        .merge(crate::chat::server::chat_routes().with_state(()))
+        .layer(axum::extract::DefaultBodyLimit::max(
+            crate::chat::MAX_FILE_BYTES as usize + (1 << 20),
+        ))
         .with_state(state);
 
     let handle = tokio::spawn(async move {

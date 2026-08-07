@@ -50,16 +50,23 @@ data-encoding = "2"
 urlencoding = "2"
 jsonwebtoken = "9"
 chrono = "0.4"
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 axum-server = { version = "0.7", features = ["tls-rustls"] }
+rustls = { version = "0.23", features = ["ring"] }
 rcgen = "0.13"
 tower-http = { version = "0.6", features = ["cors", "fs"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time", "io-util"] }
 tokio-util = { version = "0.7", features = ["io"] }
 tokio-stream = "0.1"
+futures-util = "0.3"
 local-ip-address = "0.6"
 dirs-next = "2"
 igd-next = { version = "0.15", features = ["aio_tokio"] }
+
+[dev-dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
 
 [profile.dev]
 debug = false
