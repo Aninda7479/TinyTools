@@ -87,3 +87,25 @@ try {
   console.error('Failed to regenerate Cargo.lock:', e);
   process.exit(1);
 }
+
+// 5. Ensure src-wasm/pkg/index.js exists (stub for bundler build resolution)
+const wasmPkgDir = path.join(__dirname, '../src-wasm/pkg');
+const wasmPkgIndex = path.join(wasmPkgDir, 'index.js');
+try {
+  if (!fs.existsSync(wasmPkgDir)) {
+    fs.mkdirSync(wasmPkgDir, { recursive: true });
+  }
+  if (!fs.existsSync(wasmPkgIndex)) {
+    const stubContent = `export function wasm_process_image() { throw new Error("WASM module not built"); }
+export function wasm_remove_background() { throw new Error("WASM module not built"); }
+export function wasm_strip_metadata() { throw new Error("WASM module not built"); }
+export function wasm_redact_regions() { throw new Error("WASM module not built"); }
+export function wasm_add_watermark() { throw new Error("WASM module not built"); }\n`;
+    fs.writeFileSync(wasmPkgIndex, stubContent, 'utf8');
+    console.log('Created WASM resolution stub at src-wasm/pkg/index.js');
+  }
+} catch (e) {
+  console.error('Failed to create WASM stub:', e);
+  process.exit(1);
+}
+
