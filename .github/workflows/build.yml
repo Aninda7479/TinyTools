@@ -95,6 +95,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: "npx tauri"
 
@@ -121,6 +123,9 @@ jobs:
             target/release/bundle/**/*.AppImage
             target/release/bundle/**/*.dmg
             target/release/bundle/**/*.app
+            target/release/bundle/**/*.sig
+            target/release/bundle/**/*.tar.gz
+            target/release/bundle/**/*.zip
             target/release/tinytools-server-v*.zip
             target/release/tinytools-server-v*.tar.gz
 
@@ -157,6 +162,11 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Generate Updater JSON
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
+        run: node scripts/generate-updater-json.cjs
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
