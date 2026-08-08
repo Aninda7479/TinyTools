@@ -247,7 +247,7 @@ pub fn upscale_image(image_data: &[u8], scale: u32) -> Result<js_sys::Uint8Array
 }
 
 #[wasm_bindgen]
-pub fn sepia_filter(image_data: &[u8]) -> Result<js_sys::Uint8Array, JsValue> {
+pub fn sepia_filter(image_data: &[u8], intensity: f64) -> Result<js_sys::Uint8Array, JsValue> {
     let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -259,10 +259,15 @@ pub fn sepia_filter(image_data: &[u8]) -> Result<js_sys::Uint8Array, JsValue> {
             let r = p[0] as f64;
             let g = p[1] as f64;
             let b = p[2] as f64;
-            let sr = (0.393 * r + 0.769 * g + 0.189 * b).min(255.0) as u8;
-            let sg = (0.349 * r + 0.686 * g + 0.168 * b).min(255.0) as u8;
-            let sb = (0.272 * r + 0.534 * g + 0.131 * b).min(255.0) as u8;
-            out_img.put_pixel(x, y, Rgba([sr, sg, sb, p[3]]));
+            let sr = (0.393 * r + 0.769 * g + 0.189 * b).min(255.0);
+            let sg = (0.349 * r + 0.686 * g + 0.168 * b).min(255.0);
+            let sb = (0.272 * r + 0.534 * g + 0.131 * b).min(255.0);
+            
+            let nr = (r * (1.0 - intensity) + sr * intensity) as u8;
+            let ng = (g * (1.0 - intensity) + sg * intensity) as u8;
+            let nb = (b * (1.0 - intensity) + sb * intensity) as u8;
+            
+            out_img.put_pixel(x, y, Rgba([nr, ng, nb, p[3]]));
         }
     }
 
@@ -277,16 +282,16 @@ pub fn sepia_filter(image_data: &[u8]) -> Result<js_sys::Uint8Array, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn smart_sharpen(image_data: &[u8], strength: f32) -> Result<js_sys::Uint8Array, JsValue> {
+pub fn smart_sharpen(image_data: &[u8], amount: f32, radius: f32) -> Result<js_sys::Uint8Array, JsValue> {
     let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
 
-    let blurred = img.blur(strength * 0.3);
+    let blurred = img.blur(radius);
     let blur_rgba = blurred.to_rgba8();
     let mut out_img = RgbaImage::new(w, h);
 
-    let amount = (strength as f64).clamp(0.1, 5.0);
+    let amount = (amount as f64).clamp(0.1, 5.0);
 
     for y in 0..h {
         for x in 0..w {
@@ -316,22 +321,24 @@ pub fn smart_sharpen(image_data: &[u8], strength: f32) -> Result<js_sys::Uint8Ar
 }
 
 #[wasm_bindgen]
-pub fn depth_blur(image_data: &[u8], blur_strength: f32) -> Result<js_sys::Uint8Array, JsValue> {
+pub fn depth_blur(image_data: &[u8], blur_strength: f32, focus_x: f32, focus_y: f32, focus_size: f32) -> Result<js_sys::Uint8Array, JsValue> {
     let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let (w, h) = img.dimensions();
     let blurred = img.blur(blur_strength);
     let mut out_img = img.to_rgba8();
     let blurred_rgba = blurred.to_rgba8();
-    let cx = w as f64 / 2.0;
-    let cy = h as f64 / 2.0;
-    let max_dist = (cx * cx + cy * cy).sqrt();
+    
+    let cx = w as f64 * (focus_x as f64 / 100.0);
+    let cy = h as f64 * (focus_y as f64 / 100.0);
+    let max_dist = (w as f64).hypot(h as f64);
+    let falloff = 100.0 / (focus_size as f64).clamp(1.0, 100.0);
 
     for y in 0..h {
         for x in 0..w {
             let dx = x as f64 - cx;
             let dy = y as f64 - cy;
-            let dist = (dx * dx + dy * dy).sqrt() / max_dist;
-            let blend = (dist * 1.5).min(1.0);
+            let dist = dx.hypot(dy) / max_dist;
+            let blend = (dist * falloff).min(1.0);
             let sharp = *out_img.get_pixel(x, y);
             let blur_p = *blurred_rgba.get_pixel(x, y);
             let r = (sharp[0] as f64 * (1.0 - blend) + blur_p[0] as f64 * blend) as u8;

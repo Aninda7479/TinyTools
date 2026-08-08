@@ -234,7 +234,7 @@ pub fn upscale_image(input_path: String, output_path: String, scale: u32) -> Res
     Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Upscaled {}x ({}x{} -> {}x{})", scale, w, h, new_w, new_h) })
 }
 
-pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResult, String> {
+pub fn sepia_filter(input_path: String, output_path: String, intensity: f64) -> Result<ToolResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -246,10 +246,15 @@ pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResul
             let r = p[0] as f64;
             let g = p[1] as f64;
             let b = p[2] as f64;
-            let sr = (0.393 * r + 0.769 * g + 0.189 * b).min(255.0) as u8;
-            let sg = (0.349 * r + 0.686 * g + 0.168 * b).min(255.0) as u8;
-            let sb = (0.272 * r + 0.534 * g + 0.131 * b).min(255.0) as u8;
-            out.put_pixel(x, y, Rgba([sr, sg, sb, 255]));
+            let sr = (0.393 * r + 0.769 * g + 0.189 * b).min(255.0);
+            let sg = (0.349 * r + 0.686 * g + 0.168 * b).min(255.0);
+            let sb = (0.272 * r + 0.534 * g + 0.131 * b).min(255.0);
+            
+            let nr = (r * (1.0 - intensity) + sr * intensity) as u8;
+            let ng = (g * (1.0 - intensity) + sg * intensity) as u8;
+            let nb = (b * (1.0 - intensity) + sb * intensity) as u8;
+            
+            out.put_pixel(x, y, Rgba([nr, ng, nb, p[3]]));
         }
     }
 
@@ -257,16 +262,16 @@ pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResul
     Ok(ToolResult { success: true, output_path: Some(output_path), message: "Sepia filter applied".into() })
 }
 
-pub fn smart_sharpen(input_path: String, output_path: String, strength: f32) -> Result<ToolResult, String> {
+pub fn smart_sharpen(input_path: String, output_path: String, amount: f32, radius: f32) -> Result<ToolResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
 
-    let blurred = img.blur((strength * 0.3) as f32);
+    let blurred = img.blur(radius);
     let blur_rgba = blurred.to_rgba8();
     let mut out = RgbaImage::new(w, h);
 
-    let amount = (strength as f64).clamp(0.1, 5.0);
+    let amount = (amount as f64).clamp(0.1, 5.0);
 
     for y in 0..h {
         for x in 0..w {
@@ -289,22 +294,24 @@ pub fn smart_sharpen(input_path: String, output_path: String, strength: f32) -> 
     Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Smart sharpen applied (strength: {})", strength) })
 }
 
-pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32) -> Result<ToolResult, String> {
+pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32, focus_x: f32, focus_y: f32, focus_size: f32) -> Result<ToolResult, String> {
     let img = image::open(&input_path).map_err(|e| e.to_string())?;
     let (w, h) = img.dimensions();
     let blurred = img.blur(blur_strength as f32);
     let mut out = img.to_rgba8();
     let blurred_rgba = blurred.to_rgba8();
-    let cx = w as f64 / 2.0;
-    let cy = h as f64 / 2.0;
-    let max_dist = (cx * cx + cy * cy).sqrt();
+    
+    let cx = w as f64 * (focus_x as f64 / 100.0);
+    let cy = h as f64 * (focus_y as f64 / 100.0);
+    let max_dist = (w as f64).hypot(h as f64);
+    let falloff = 100.0 / (focus_size as f64).clamp(1.0, 100.0);
 
     for y in 0..h {
         for x in 0..w {
             let dx = x as f64 - cx;
             let dy = y as f64 - cy;
-            let dist = (dx * dx + dy * dy).sqrt() / max_dist;
-            let blend = (dist * 1.5).min(1.0);
+            let dist = dx.hypot(dy) / max_dist;
+            let blend = (dist * falloff).min(1.0);
             let sharp = *out.get_pixel(x, y);
             let blur_p = *blurred_rgba.get_pixel(x, y);
             let r = (sharp[0] as f64 * (1.0 - blend) + blur_p[0] as f64 * blend) as u8;

@@ -2,16 +2,17 @@ import { useState, useEffect, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import ToolPage, { OptionRow, OptionSlider } from "./ToolPage";
-import { inpaintImage, upscaleImage, sepiaFilter, smartSharpen, depthBlur } from "../lib/tauri";
-type AiTool = "bg-remove" | "inpaint" | "upscale" | "sepia" | "smart-sharpen" | "depth-blur";
+import { inpaintImage, sepiaFilter, smartSharpen, depthBlur, upscaleImage } from "../lib/tauri";
+type AiTool = "bg-remove" | "inpaint" | "upscale" | "sepia" | "smart-sharpen" | "depth-blur" | "ai-portrait-blur";
 
 const tools: { id: AiTool; label: string; description: string }[] = [
   { id: "bg-remove", label: "Background Removal", description: "Remove backgrounds → transparent PNG" },
   { id: "inpaint", label: "Object Removal", description: "Erase unwanted objects or text" },
   { id: "upscale", label: "AI Upscale", description: "Increase resolution 2x or 4x" },
+  { id: "ai-portrait-blur", label: "AI Portrait Blur", description: "True DSLR portrait mode via AI" },
   { id: "sepia", label: "Sepia Filter", description: "Vintage sepia tone effect" },
   { id: "smart-sharpen", label: "Smart Sharpen", description: "Edge-aware detail enhancement" },
-  { id: "depth-blur", label: "Depth Blur", description: "DSLR-style bokeh background blur" },
+  { id: "depth-blur", label: "Depth Blur", description: "Spatial bokeh background blur" },
 ];
 
 function BoundingBoxSelector({ src, onChange }: { src: string, onChange: (rect: [number, number, number, number]) => void }) {
@@ -103,7 +104,12 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
   const [selectedTool, setSelectedTool] = useState<AiTool>((defaultSub as AiTool) || "bg-remove");
   const [scale, setScale] = useState(2);
   const [blurStrength, setBlurStrength] = useState(8.0);
-  const [faceStrength, setFaceStrength] = useState(1.0);
+  const [focusX, setFocusX] = useState(50.0);
+  const [focusY, setFocusY] = useState(50.0);
+  const [focusSize, setFocusSize] = useState(50.0);
+  const [sharpenAmount, setSharpenAmount] = useState(1.0);
+  const [sharpenRadius, setSharpenRadius] = useState(1.5);
+  const [sepiaIntensity, setSepiaIntensity] = useState(0.8);
   const [inpaintRegions, setInpaintRegions] = useState<[number, number, number, number][]>([]);
   const [bgModel, setBgModel] = useState("studioludens/birefnet-lite-512");
   const [status, setStatus] = useState("");
@@ -193,11 +199,32 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
 
     try {
       let result;
-      if (selectedTool === "bg-remove") {
+      if (selectedTool === "bg-remove" || selectedTool === "upscale" || selectedTool === "ai-portrait-blur") {
         setDownloadProgress(0);
-        result = await new Promise<any>((resolve, reject) => {
+        result = await new Promise<any>(async (resolve, reject) => {
           const worker = workerRef.current;
           if (!worker) return reject("Worker not initialized");
+
+          const imageUrl = f.path.startsWith("blob:") ? f.path : convertFileSrc(f.path);
+          
+          if (selectedTool === "upscale") {
+            const img = new Image();
+            img.src = imageUrl;
+            await new Promise((r) => { img.onload = r; img.onerror = r; });
+            if (img.width * img.height > 1000000) { // If > 1 Megapixel (~1000x1000)
+              try {
+                setStatus("Image is large. Using Fast Native Upscaler to save time...");
+                const result = await upscaleImage(f.path, out, scale);
+                if (result.success) {
+                   return resolve({ message: "Done (Fast Native Upscale used for large image)" });
+                } else {
+                   return reject(result.message);
+                }
+              } catch(e) {
+                return reject(e);
+              }
+            }
+          }
 
           const handleMessage = async (e: MessageEvent) => {
             const { type, id, blob, progressData, error } = e.data;
@@ -214,7 +241,7 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
                 setStatus(`Initiating download...`);
               }
             } else if (type === "processing") {
-              setStatus("Processing image with WebGPU...");
+              setStatus(e.data.message || "Processing image with AI...");
             } else if (type === "result") {
               worker.removeEventListener("message", handleMessage);
               try {
@@ -230,7 +257,7 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
                   a.click();
                   URL.revokeObjectURL(url);
                 }
-                resolve({ message: "Done" });
+                resolve({ message: "Done (AI Upscale)" });
               } catch (writeErr) {
                 reject(writeErr);
               }
@@ -241,8 +268,9 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
           };
 
           worker.addEventListener("message", handleMessage);
-          const imageUrl = f.path.startsWith("blob:") ? f.path : convertFileSrc(f.path);
-          worker.postMessage({ action: "remove_background", id: f.path, imageUrl, model: bgModel });
+          const action = selectedTool === "bg-remove" ? "remove_background" : (selectedTool === "ai-portrait-blur" ? "portrait_blur" : "upscale_image");
+          const modelToUse = (selectedTool === "bg-remove" || selectedTool === "ai-portrait-blur") ? bgModel : "Xenova/swin2SR-classical-sr-x2-64";
+          worker.postMessage({ action, id: f.path, imageUrl, model: modelToUse, blurStrength });
         });
       } else {
         switch (selectedTool) {
@@ -265,10 +293,10 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
             }
             break;
           }
-          case "upscale": result = await upscaleImage(f.path, out, scale); break;
-          case "sepia": result = await sepiaFilter(f.path, out); break;
-          case "smart-sharpen": result = await smartSharpen(f.path, out, faceStrength); break;
-          case "depth-blur": result = await depthBlur(f.path, out, blurStrength); break;
+
+          case "sepia": result = await sepiaFilter(f.path, out, sepiaIntensity); break;
+          case "smart-sharpen": result = await smartSharpen(f.path, out, sharpenAmount, sharpenRadius); break;
+          case "depth-blur": result = await depthBlur(f.path, out, blurStrength, focusX, focusY, focusSize); break;
         }
       }
       setStatus(result?.message || "Done");
@@ -281,27 +309,27 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
     <ToolPage
       title="AI & Smart Tools"
       description="Local AI-powered image processing"
-          onProcess={handleProcess}
-          processLabel="Run AI Tool"
-          allowWeb={selectedTool === "bg-remove" || selectedTool === "inpaint"}
-          renderPreview={selectedTool === "inpaint" ? (f) => (
-            <BoundingBoxSelector src={f.path} onChange={(r) => setInpaintRegions([r])} />
-          ) : undefined}
-        >
-          <div className="flex flex-col gap-2">
-            <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
-            {tools.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTool(t.id)}
-                className={`text-left p-3 rounded-xl border transition-colors ${selectedTool === t.id ? "bg-white/10 border-white/20" : "bg-white/5 border-border hover:border-border-hover"
-                  }`}
-              >
-                <p className="text-sm font-medium">{t.label}</p>
-                <p className="text-xs text-white/40">{t.description}</p>
-              </button>
-            ))}
-          </div>
+      onProcess={handleProcess}
+      processLabel="Run AI Tool"
+      allowWeb={selectedTool === "bg-remove" || selectedTool === "inpaint" || selectedTool === "upscale" || selectedTool === "sepia" || selectedTool === "smart-sharpen" || selectedTool === "depth-blur" || selectedTool === "ai-portrait-blur"}
+      renderPreview={selectedTool === "inpaint" ? (f) => (
+        <BoundingBoxSelector src={f.path} onChange={(r) => setInpaintRegions([r])} />
+      ) : undefined}
+    >
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
+        {tools.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setSelectedTool(t.id)}
+            className={`text-left p-3 rounded-xl border transition-colors ${selectedTool === t.id ? "bg-white/10 border-white/20" : "bg-white/5 border-border hover:border-border-hover"
+              }`}
+          >
+            <p className="text-sm font-medium">{t.label}</p>
+            <p className="text-xs text-white/40">{t.description}</p>
+          </button>
+        ))}
+      </div>
 
       {selectedTool === "bg-remove" && (
         <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2">
@@ -349,18 +377,46 @@ export default function AiToolsPage({ defaultSub }: { defaultSub?: string } = {}
         </div>
       )}
 
-      {selectedTool === "depth-blur" && (
-        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border">
+      {selectedTool === "ai-portrait-blur" && (
+        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2">
           <OptionRow label="Blur Strength">
-            <OptionSlider value={blurStrength} min={2} max={20} step={0.5} onChange={setBlurStrength} />
+            <OptionSlider value={blurStrength} min={2} max={20} step={1} onChange={setBlurStrength} />
+          </OptionRow>
+        </div>
+      )}
+
+      {selectedTool === "depth-blur" && (
+        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2">
+          <OptionRow label="Blur Strength">
+            <OptionSlider value={blurStrength} min={2} max={20} step={1} onChange={setBlurStrength} />
+          </OptionRow>
+          <OptionRow label="Focus X (%)">
+            <OptionSlider value={focusX} min={0} max={100} step={1} onChange={setFocusX} />
+          </OptionRow>
+          <OptionRow label="Focus Y (%)">
+            <OptionSlider value={focusY} min={0} max={100} step={1} onChange={setFocusY} />
+          </OptionRow>
+          <OptionRow label="Focus Size (%)">
+            <OptionSlider value={focusSize} min={10} max={100} step={1} onChange={setFocusSize} />
+          </OptionRow>
+        </div>
+      )}
+
+      {selectedTool === "sepia" && (
+        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border">
+          <OptionRow label="Intensity">
+            <OptionSlider value={sepiaIntensity} min={0.0} max={1.0} step={0.05} onChange={setSepiaIntensity} />
           </OptionRow>
         </div>
       )}
 
       {selectedTool === "smart-sharpen" && (
-        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border">
-          <OptionRow label="Strength">
-            <OptionSlider value={faceStrength} min={0.5} max={3} step={0.1} onChange={setFaceStrength} />
+        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2">
+          <OptionRow label="Amount">
+            <OptionSlider value={sharpenAmount} min={0.5} max={3.0} step={0.1} onChange={setSharpenAmount} />
+          </OptionRow>
+          <OptionRow label="Radius">
+            <OptionSlider value={sharpenRadius} min={0.5} max={5.0} step={0.1} onChange={setSharpenRadius} />
           </OptionRow>
         </div>
       )}

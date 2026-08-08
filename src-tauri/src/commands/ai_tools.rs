@@ -43,8 +43,8 @@ pub fn upscale_image(input_path: String, output_path: String, scale: u32) -> Res
 }
 
 #[tauri::command]
-pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    core_sepia(input_path, output_path).map(|r| ToolResult {
+pub fn sepia_filter(input_path: String, output_path: String, intensity: f64) -> Result<ToolResult, String> {
+    core_sepia(input_path, output_path, intensity).map(|r| ToolResult {
         success: r.success,
         output_path: r.output_path,
         message: r.message,
@@ -52,8 +52,8 @@ pub fn sepia_filter(input_path: String, output_path: String) -> Result<ToolResul
 }
 
 #[tauri::command]
-pub fn smart_sharpen(input_path: String, output_path: String, strength: f32) -> Result<ToolResult, String> {
-    core_sharpen(input_path, output_path, strength).map(|r| ToolResult {
+pub fn smart_sharpen(input_path: String, output_path: String, amount: f32, radius: f32) -> Result<ToolResult, String> {
+    core_sharpen(input_path, output_path, amount, radius).map(|r| ToolResult {
         success: r.success,
         output_path: r.output_path,
         message: r.message,
@@ -61,8 +61,8 @@ pub fn smart_sharpen(input_path: String, output_path: String, strength: f32) -> 
 }
 
 #[tauri::command]
-pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32) -> Result<ToolResult, String> {
-    core_depth_blur(input_path, output_path, blur_strength).map(|r| ToolResult {
+pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32, focus_x: f32, focus_y: f32, focus_size: f32) -> Result<ToolResult, String> {
+    core_depth_blur(input_path, output_path, blur_strength, focus_x, focus_y, focus_size).map(|r| ToolResult {
         success: r.success,
         output_path: r.output_path,
         message: r.message,

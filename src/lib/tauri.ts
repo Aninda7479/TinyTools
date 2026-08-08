@@ -147,23 +147,23 @@ export async function upscaleImage(input: string, output: string, scale: number)
   }
   return invoke<ToolResult>("upscale_image", { inputPath: input, outputPath: output, scale });
 }
-export async function sepiaFilter(input: string, output: string): Promise<ToolResult> {
+export async function sepiaFilter(input: string, output: string, intensity: number): Promise<ToolResult> {
   if (!isTauri()) {
-    return runWasmProcess(input, output, (wasm, bytes) => wasm.sepia_filter(bytes), "Sepia filter applied via WASM");
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.sepia_filter(bytes, intensity), "Sepia filter applied via WASM");
   }
-  return invoke<ToolResult>("sepia_filter", { inputPath: input, outputPath: output });
+  return invoke<ToolResult>("sepia_filter", { inputPath: input, outputPath: output, intensity });
 }
-export async function smartSharpen(input: string, output: string, strength: number): Promise<ToolResult> {
+export async function smartSharpen(input: string, output: string, amount: number, radius: number): Promise<ToolResult> {
   if (!isTauri()) {
-    return runWasmProcess(input, output, (wasm, bytes) => wasm.smart_sharpen(bytes, strength), "Smart sharpen applied via WASM");
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.smart_sharpen(bytes, amount, radius), "Smart sharpen applied via WASM");
   }
-  return invoke<ToolResult>("smart_sharpen", { inputPath: input, outputPath: output, strength });
+  return invoke<ToolResult>("smart_sharpen", { inputPath: input, outputPath: output, amount, radius });
 }
-export async function depthBlur(input: string, output: string, blurStrength: number): Promise<ToolResult> {
+export async function depthBlur(input: string, output: string, blurStrength: number, focusX: number, focusY: number, focusSize: number): Promise<ToolResult> {
   if (!isTauri()) {
-    return runWasmProcess(input, output, (wasm, bytes) => wasm.depth_blur(bytes, blurStrength), "Depth blur applied via WASM");
+    return runWasmProcess(input, output, (wasm, bytes) => wasm.depth_blur(bytes, blurStrength, focusX, focusY, focusSize), "Depth blur applied via WASM");
   }
-  return invoke<ToolResult>("depth_blur", { inputPath: input, outputPath: output, blurStrength });
+  return invoke<ToolResult>("depth_blur", { inputPath: input, outputPath: output, blurStrength, focusX, focusY, focusSize });
 }
 
 // Privacy
