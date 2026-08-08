@@ -4,7 +4,7 @@ import {
   Globe, Download, Eye, EyeOff, FileDown, FolderOpen,
 } from "lucide-react";
 import * as p2p from "../lib/p2p-api";
-import { saveFile, pickDirectory } from "../lib/tauri";
+import { isTauri, saveFile, pickDirectory } from "../lib/tauri";
 import P2PWebPortal from "./P2PWebPortal";
 
 export default function P2PReceivePage() {
@@ -31,6 +31,10 @@ export default function P2PReceivePage() {
   }, [portal]);
 
   const handleStartPortal = async () => {
+    if (!isTauri()) {
+      setError("Hosting a Local Web Portal requires the TinyTools Desktop App.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -48,6 +52,7 @@ export default function P2PReceivePage() {
   };
 
   const handleStopPortal = async () => {
+    if (!isTauri()) return;
     try {
       await p2p.stopWebPortal();
       setPortal(null);
@@ -95,6 +100,23 @@ export default function P2PReceivePage() {
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / 1048576).toFixed(1) + " MB";
   };
+
+  if (!isTauri()) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 max-w-md mx-auto text-center">
+        <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-2">
+          <Globe className="w-8 h-8 text-blue-400" />
+        </div>
+        <h2 className="text-xl font-semibold">Desktop App Required</h2>
+        <p className="text-sm text-white/50 leading-relaxed">
+          Hosting a Local Web Portal requires spinning up a web server on your local network. Web browsers do not have the capability to act as network servers.
+        </p>
+        <p className="text-sm text-white/50 leading-relaxed mt-2">
+          Please download the <span className="text-white/80 font-medium">TinyTools Desktop App</span> to receive files securely across your network. (Senders can still upload via their browser!)
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full gap-4">
