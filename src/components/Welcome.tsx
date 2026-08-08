@@ -33,6 +33,7 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
       { icon: Brain, title: "BG Remove", tag: "AI", tool: "ai", sub: "bg-remove", keywords: "background remove transparent cutout" },
       { icon: Zap, title: "Upscale", tag: "AI", tool: "ai", sub: "upscale", keywords: "upscale enhance resolution 2x 4x" },
       { icon: Paintbrush, title: "Inpaint", tag: "AI", tool: "ai", sub: "inpaint", keywords: "inpaint fill remove object repair" },
+      { icon: Eye, title: "AI Portrait Blur", tag: "AI", tool: "ai", sub: "ai-portrait-blur", keywords: "ai portrait blur depth bokeh true iphone" },
       { icon: Palette, title: "Sepia Tone", tag: "AI", tool: "ai", sub: "sepia", keywords: "sepia vintage tone warm filter" },
       { icon: Gauge, title: "Smart Sharpen", tag: "AI", tool: "ai", sub: "smart-sharpen", keywords: "sharpen edge enhance detail" },
       { icon: Eye, title: "Depth Blur", tag: "AI", tool: "ai", sub: "depth-blur", keywords: "depth blur bokeh portrait" },

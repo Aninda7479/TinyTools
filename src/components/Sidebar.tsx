@@ -47,6 +47,7 @@ export const sidebarCategories: SidebarCategory[] = [
       { icon: Brain, title: "BG Remove", tag: "AI", tool: "ai", sub: "bg-remove" },
       { icon: Zap, title: "Upscale", tag: "AI", tool: "ai", sub: "upscale" },
       { icon: Paintbrush, title: "Inpaint", tag: "AI", tool: "ai", sub: "inpaint" },
+      { icon: Eye, title: "AI Portrait Blur", tag: "AI", tool: "ai", sub: "ai-portrait-blur" },
       { icon: Palette, title: "Sepia Tone", tag: "AI", tool: "ai", sub: "sepia" },
       { icon: Gauge, title: "Smart Sharpen", tag: "AI", tool: "ai", sub: "smart-sharpen" },
       { icon: Eye, title: "Depth Blur", tag: "AI", tool: "ai", sub: "depth-blur" },

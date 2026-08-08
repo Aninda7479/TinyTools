@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import * as chat from "../lib/chat-api";
 
+import { isTauri } from "../lib/tauri";
+
 export default function LanChatPage() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -47,6 +49,10 @@ export default function LanChatPage() {
   }, [room]);
 
   const handleStart = async () => {
+    if (!isTauri()) {
+      setError("Hosting a LAN Chat requires the TinyTools Desktop App.");
+      return;
+    }
     if (!password) {
       setError("Set a room password first");
       return;
@@ -64,6 +70,7 @@ export default function LanChatPage() {
   };
 
   const handleStop = async () => {
+    if (!isTauri()) return;
     try {
       await chat.stopChatRoom();
       setRoom(null);
@@ -83,6 +90,23 @@ export default function LanChatPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (!isTauri()) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 max-w-md mx-auto text-center">
+        <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-2">
+          <MessageCircle className="w-8 h-8 text-blue-400" />
+        </div>
+        <h2 className="text-xl font-semibold">Desktop App Required</h2>
+        <p className="text-sm text-white/50 leading-relaxed">
+          Hosting a secure LAN Chat requires spinning up an encrypted web server on your local network. Web browsers do not have the capability to act as network servers.
+        </p>
+        <p className="text-sm text-white/50 leading-relaxed mt-2">
+          Please download the <span className="text-white/80 font-medium">TinyTools Desktop App</span> to host chat rooms. (Participants can still join via their browser!)
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full gap-4">

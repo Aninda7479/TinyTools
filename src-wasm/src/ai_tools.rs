@@ -1,31 +1,19 @@
+use wasm_bindgen::prelude::*;
 use image::{GenericImageView, Rgba, RgbaImage};
-use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ToolResult {
-    pub success: bool,
-    pub output_path: Option<String>,
-    pub message: String,
-}
-
-fn perceptual_dist(p: Rgba<u8>, bg: [u8; 3]) -> f64 {
-    let dr = p[0] as f64 - bg[0] as f64;
-    let dg = p[1] as f64 - bg[1] as f64;
-    let db = p[2] as f64 - bg[2] as f64;
-    (0.299 * dr * dr + 0.587 * dg * dg + 0.114 * db * db).sqrt()
-}
-
-pub fn remove_background(input_path: String, output_path: String) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
+#[wasm_bindgen]
+pub fn remove_background(image_data: &[u8]) -> Result<js_sys::Uint8Array, JsValue> {
+    let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let mut out = RgbaImage::new(w, h);
 
-    let border = 8u32;
+    // ── Step 1: Sample background color from all edges ──
     let mut bg_r: Vec<u8> = Vec::new();
     let mut bg_g: Vec<u8> = Vec::new();
     let mut bg_b: Vec<u8> = Vec::new();
 
+    let border = 8u32;
     for x in 0..w {
         for d in 0..border {
             if d >= h { break; }
@@ -51,6 +39,7 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
     let mid = bg_r.len() / 2;
     let bg_color = [bg_r[mid], bg_g[mid], bg_b[mid]];
 
+    // ── Step 2: Compute per-pixel distance to background ──
     let total_px = (w * h) as usize;
     let mut dist_map: Vec<f64> = Vec::with_capacity(total_px);
     let mut max_dist: f64 = 0.0;
@@ -65,6 +54,7 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
     }
     if max_dist < 1.0 { max_dist = 1.0; }
 
+    // ── Step 3: Find threshold using percentile + Otsu ──
     let mut sorted_dists = dist_map.clone();
     sorted_dists.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
 
@@ -104,6 +94,7 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
     let threshold = percentile_thresh.max(otsu_thresh).max(max_dist * 0.02);
     let transition_half = max_dist * 0.12;
 
+    // ── Step 4: Generate alpha mask directly from distance map ──
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) as usize;
@@ -124,8 +115,9 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
         }
     }
 
-    for y in 1..h - 1 {
-        for x in 1..w - 1 {
+    // ── Step 5: Edge cleanup — remove isolated foreground specks ──
+    for y in 1..h-1 {
+        for x in 1..w-1 {
             let alpha = out.get_pixel(x, y)[3];
             if alpha > 128 {
                 let mut transparent = 0;
@@ -144,8 +136,9 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
         }
     }
 
-    for y in 1..h - 1 {
-        for x in 1..w - 1 {
+    // ── Step 6: Fill isolated background holes ──
+    for y in 1..h-1 {
+        for x in 1..w-1 {
             let alpha = out.get_pixel(x, y)[3];
             if alpha < 128 {
                 let mut opaque = 0;
@@ -165,23 +158,28 @@ pub fn remove_background(input_path: String, output_path: String) -> Result<Tool
         }
     }
 
-    out.save(&output_path).map_err(|e| e.to_string())?;
-
-    let fg_pixels = dist_map.iter().filter(|d| **d > threshold + transition_half).count();
-    let pct = (fg_pixels as f64 / total_px as f64 * 100.0) as u32;
-    let msg = format!("Background removed — {}% foreground (bg: [{},{},{}], thresh: {:.1}, otsu: {:.1})",
-        pct, bg_color[0], bg_color[1], bg_color[2], threshold, otsu_thresh);
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: msg })
+    let mut out_cur = std::io::Cursor::new(Vec::new());
+    out.write_to(&mut out_cur, image::ImageFormat::Png).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let out_bytes = out_cur.into_inner();
+    let js_array = js_sys::Uint8Array::new_with_length(out_bytes.len() as u32);
+    js_array.copy_from(&out_bytes);
+    Ok(js_array)
 }
 
-pub fn inpaint_image(
-    input_path: String,
-    output_path: String,
-    regions: Vec<(u32, u32, u32, u32)>,
-) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
+fn perceptual_dist(p: Rgba<u8>, bg: [u8; 3]) -> f64 {
+    let dr = p[0] as f64 - bg[0] as f64;
+    let dg = p[1] as f64 - bg[1] as f64;
+    let db = p[2] as f64 - bg[2] as f64;
+    (0.299 * dr * dr + 0.587 * dg * dg + 0.114 * db * db).sqrt()
+}
+
+#[wasm_bindgen]
+pub fn inpaint_image(image_data: &[u8], regions_json: &str) -> Result<js_sys::Uint8Array, JsValue> {
+    let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let mut rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
+
+    let regions: Vec<(u32, u32, u32, u32)> = serde_json::from_str(regions_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     for (rx, ry, rw, rh) in regions {
         let mut sum_r: u64 = 0;
@@ -219,26 +217,41 @@ pub fn inpaint_image(
         }
     }
 
-    rgba.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Inpainting completed".into() })
+    let mut out = std::io::Cursor::new(Vec::new());
+    let format = image::guess_format(image_data).unwrap_or(image::ImageFormat::Png);
+    rgba.write_to(&mut out, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    let out_bytes = out.into_inner();
+    let js_array = js_sys::Uint8Array::new_with_length(out_bytes.len() as u32);
+    js_array.copy_from(&out_bytes);
+    Ok(js_array)
 }
 
-pub fn upscale_image(input_path: String, output_path: String, scale: u32) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
+#[wasm_bindgen]
+pub fn upscale_image(image_data: &[u8], scale: u32) -> Result<js_sys::Uint8Array, JsValue> {
+    let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let (w, h) = img.dimensions();
     let new_w = w * scale;
     let new_h = h * scale;
     let upscaled = img.resize(new_w, new_h, image::imageops::FilterType::Lanczos3);
     let sharpened = upscaled.unsharpen(1.0, 1);
-    sharpened.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Upscaled {}x ({}x{} -> {}x{})", scale, w, h, new_w, new_h) })
+    
+    let mut out = std::io::Cursor::new(Vec::new());
+    let format = image::guess_format(image_data).unwrap_or(image::ImageFormat::Png);
+    sharpened.write_to(&mut out, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    let out_bytes = out.into_inner();
+    let js_array = js_sys::Uint8Array::new_with_length(out_bytes.len() as u32);
+    js_array.copy_from(&out_bytes);
+    Ok(js_array)
 }
 
-pub fn sepia_filter(input_path: String, output_path: String, intensity: f64) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
+#[wasm_bindgen]
+pub fn sepia_filter(image_data: &[u8], intensity: f64) -> Result<js_sys::Uint8Array, JsValue> {
+    let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let mut out = RgbaImage::new(w, h);
+    let mut out_img = RgbaImage::new(w, h);
 
     for y in 0..h {
         for x in 0..w {
@@ -254,22 +267,29 @@ pub fn sepia_filter(input_path: String, output_path: String, intensity: f64) -> 
             let ng = (g * (1.0 - intensity) + sg * intensity) as u8;
             let nb = (b * (1.0 - intensity) + sb * intensity) as u8;
             
-            out.put_pixel(x, y, Rgba([nr, ng, nb, p[3]]));
+            out_img.put_pixel(x, y, Rgba([nr, ng, nb, p[3]]));
         }
     }
 
-    out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Sepia filter applied".into() })
+    let mut out = std::io::Cursor::new(Vec::new());
+    let format = image::guess_format(image_data).unwrap_or(image::ImageFormat::Png);
+    out_img.write_to(&mut out, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    let out_bytes = out.into_inner();
+    let js_array = js_sys::Uint8Array::new_with_length(out_bytes.len() as u32);
+    js_array.copy_from(&out_bytes);
+    Ok(js_array)
 }
 
-pub fn smart_sharpen(input_path: String, output_path: String, amount: f32, radius: f32) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
+#[wasm_bindgen]
+pub fn smart_sharpen(image_data: &[u8], amount: f32, radius: f32) -> Result<js_sys::Uint8Array, JsValue> {
+    let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
 
     let blurred = img.blur(radius);
     let blur_rgba = blurred.to_rgba8();
-    let mut out = RgbaImage::new(w, h);
+    let mut out_img = RgbaImage::new(w, h);
 
     let amount = (amount as f64).clamp(0.1, 5.0);
 
@@ -286,19 +306,26 @@ pub fn smart_sharpen(input_path: String, output_path: String, amount: f32, radiu
             let r = (orig[0] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
             let g = (orig[1] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
             let b = (orig[2] as f64 + detail * sharpen).clamp(0.0, 255.0) as u8;
-            out.put_pixel(x, y, Rgba([r, g, b, orig[3]]));
+            out_img.put_pixel(x, y, Rgba([r, g, b, orig[3]]));
         }
     }
 
-    out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: format!("Smart sharpen applied (strength: {})", strength) })
+    let mut out = std::io::Cursor::new(Vec::new());
+    let format = image::guess_format(image_data).unwrap_or(image::ImageFormat::Png);
+    out_img.write_to(&mut out, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    let out_bytes = out.into_inner();
+    let js_array = js_sys::Uint8Array::new_with_length(out_bytes.len() as u32);
+    js_array.copy_from(&out_bytes);
+    Ok(js_array)
 }
 
-pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32, focus_x: f32, focus_y: f32, focus_size: f32) -> Result<ToolResult, String> {
-    let img = image::open(&input_path).map_err(|e| e.to_string())?;
+#[wasm_bindgen]
+pub fn depth_blur(image_data: &[u8], blur_strength: f32, focus_x: f32, focus_y: f32, focus_size: f32) -> Result<js_sys::Uint8Array, JsValue> {
+    let img = image::load_from_memory(image_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let (w, h) = img.dimensions();
-    let blurred = img.blur(blur_strength as f32);
-    let mut out = img.to_rgba8();
+    let blurred = img.blur(blur_strength);
+    let mut out_img = img.to_rgba8();
     let blurred_rgba = blurred.to_rgba8();
     
     let cx = w as f64 * (focus_x as f64 / 100.0);
@@ -312,15 +339,21 @@ pub fn depth_blur(input_path: String, output_path: String, blur_strength: f32, f
             let dy = y as f64 - cy;
             let dist = dx.hypot(dy) / max_dist;
             let blend = (dist * falloff).min(1.0);
-            let sharp = *out.get_pixel(x, y);
+            let sharp = *out_img.get_pixel(x, y);
             let blur_p = *blurred_rgba.get_pixel(x, y);
             let r = (sharp[0] as f64 * (1.0 - blend) + blur_p[0] as f64 * blend) as u8;
             let g = (sharp[1] as f64 * (1.0 - blend) + blur_p[1] as f64 * blend) as u8;
             let b = (sharp[2] as f64 * (1.0 - blend) + blur_p[2] as f64 * blend) as u8;
-            out.put_pixel(x, y, Rgba([r, g, b, sharp[3]]));
+            out_img.put_pixel(x, y, Rgba([r, g, b, sharp[3]]));
         }
     }
 
-    out.save(&output_path).map_err(|e| e.to_string())?;
-    Ok(ToolResult { success: true, output_path: Some(output_path), message: "Depth blur applied".into() })
+    let mut out = std::io::Cursor::new(Vec::new());
+    let format = image::guess_format(image_data).unwrap_or(image::ImageFormat::Png);
+    out_img.write_to(&mut out, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    let out_bytes = out.into_inner();
+    let js_array = js_sys::Uint8Array::new_with_length(out_bytes.len() as u32);
+    js_array.copy_from(&out_bytes);
+    Ok(js_array)
 }
