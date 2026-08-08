@@ -24,8 +24,8 @@ pub struct Room {
     pub members: HashMap<String, String>,
     /// send_token -> client_id
     pub auth: HashMap<String, String>,
-    /// client_id -> socket writer (only while a WS is open)
-    pub connections: HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>,
+    /// client_id -> (conn_id, socket writer) (only while a WS is open)
+    pub connections: HashMap<String, (String, tokio::sync::mpsc::UnboundedSender<Message>)>,
     /// In-memory encrypted file blobs (never written to disk)
     pub files: HashMap<String, FileBlob>,
     /// Who is currently in the room-wide video call (client_id -> member)

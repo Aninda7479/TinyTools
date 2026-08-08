@@ -1,6 +1,7 @@
 mod commands;
 pub mod chat;
 pub mod p2p;
+pub mod sleep_preventer;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -150,6 +151,7 @@ pub fn run() {
 }
 
 pub fn run_homelab() {
+    sleep_preventer::set_homelab_awake(true);
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
     rt.block_on(async {
         let local_ip = local_ip_address::local_ip()
@@ -160,6 +162,7 @@ pub fn run_homelab() {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("Failed to start chat room: {}", e);
+                sleep_preventer::set_homelab_awake(false);
                 return;
             }
         };
@@ -168,6 +171,7 @@ pub fn run_homelab() {
             Ok(result) => result,
             Err(e) => {
                 eprintln!("Failed to start homelab server: {}", e);
+                sleep_preventer::set_homelab_awake(false);
                 return;
             }
         };
@@ -190,6 +194,7 @@ pub fn run_homelab() {
 
         let _ = handle.await;
     });
+    sleep_preventer::set_homelab_awake(false);
 }
 
 fn generate_homelab_qr(url: &str) -> Result<String, String> {

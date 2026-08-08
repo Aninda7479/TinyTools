@@ -119,6 +119,8 @@ pub fn start_web_portal(
 
     let qr_code_base64 = generate_qr_code_png(&url)?;
 
+    crate::sleep_preventer::set_portal_awake(true);
+
     Ok(PortalResult {
         url,
         receive_url,
@@ -142,6 +144,7 @@ pub fn stop_web_portal() -> Result<(), String> {
     if let Ok(mut transfers) = get_incoming_transfers().lock() {
         transfers.clear();
     }
+    crate::sleep_preventer::set_portal_awake(false);
     Ok(())
 }
 
@@ -195,6 +198,7 @@ pub fn cleanup() -> Result<(), String> {
         state.server_port = None;
         state.server_runtime = None;
     }
+    crate::sleep_preventer::set_portal_awake(false);
     Ok(())
 }
 

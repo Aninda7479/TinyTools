@@ -196,11 +196,12 @@ async fn handle_ws(socket: WebSocket, token: String) {
         return;
     };
 
+    let conn_id = uuid_simple();
     let (mut tx, mut rx) = socket.split();
     let (msg_tx, mut msg_rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
     {
         with_room_mut(|r| {
-            r.connections.insert(client_id.clone(), msg_tx.clone());
+            r.connections.insert(client_id.clone(), (conn_id.clone(), msg_tx.clone()));
         });
     }
 
@@ -287,31 +288,45 @@ async fn handle_ws(socket: WebSocket, token: String) {
     fwd_task.abort();
     {
         with_room_mut(|r| {
-            r.connections.remove(&client_id);
+            if let Some((existing_conn_id, _)) = r.connections.get(&client_id) {
+                if existing_conn_id == &conn_id {
+                    r.connections.remove(&client_id);
+                }
+            }
         });
+    }
+
+    // If they were in a call, remove them immediately
+    let was_in_call =
+        with_room_mut(|r| r.call_members.remove(&client_id).is_some()).unwrap_or(false);
+    if was_in_call {
+        broadcast_call_state(&btx);
     }
 
     let still_connected = with_room(|r| r.connections.contains_key(&client_id)).unwrap_or(false);
     if !still_connected {
-        let removed = with_room_mut(|r| {
-            r.auth.retain(|_, v| v != &client_id);
-            r.members.remove(&client_id)
-        })
-        .flatten();
-        if let Some(removed_name) = removed {
-            let _ = btx.send(RoomEvent::member(
-                "leave",
-                MemberInfo {
-                    id: client_id.clone(),
-                    name: removed_name,
-                },
-            ));
-        }
-        let was_in_call =
-            with_room_mut(|r| r.call_members.remove(&client_id).is_some()).unwrap_or(false);
-        if was_in_call {
-            broadcast_call_state(&btx);
-        }
+        let client_id_clone = client_id.clone();
+        let btx_clone = btx.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(20)).await;
+            let still_disconnected = with_room(|r| !r.connections.contains_key(&client_id_clone)).unwrap_or(true);
+            if still_disconnected {
+                let removed = with_room_mut(|r| {
+                    r.auth.retain(|_, v| v != &client_id_clone);
+                    r.members.remove(&client_id_clone)
+                })
+                .flatten();
+                if let Some(removed_name) = removed {
+                    let _ = btx_clone.send(RoomEvent::member(
+                        "leave",
+                        MemberInfo {
+                            id: client_id_clone.clone(),
+                            name: removed_name,
+                        },
+                    ));
+                }
+            }
+        });
     }
 }
 
@@ -364,7 +379,7 @@ fn handle_client_message(
             // inspects the payload — media itself flows P2P between browsers.
             let Some(to) = parsed.to else { return };
             let Some(payload) = parsed.signal else { return };
-            let target = with_room(|r| r.connections.get(&to).cloned()).flatten();
+            let target = with_room(|r| r.connections.get(&to).map(|(_, tx)| tx.clone())).flatten();
             if let Some(tx) = target {
                 let ev = RoomEvent::signal(client_id.to_string(), name.to_string(), to, payload);
                 let _ = tx.send(Message::Text(

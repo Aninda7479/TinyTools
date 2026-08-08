@@ -1802,6 +1802,7 @@ function join(){
       $('gate').style.display='none';
       $('chat').style.display='flex';
       connectWS();
+      requestWakeLock();
     })
     .catch(function(e){
       showError(e.message||'Failed to join');
@@ -1819,13 +1820,22 @@ function connectWS(){
   socket.onmessage=function(ev){
     var m;try{m=JSON.parse(ev.data);}catch(e){return;}
     if(m.type==='welcome'){
+      var isReconnect = $('chat').style.display === 'flex';
       if(m.client_id){clientId=m.client_id;}
       if(Array.isArray(m.members)){members=new Map(m.members.map(function(x){return[x.id,x.name];}));renderRoster();}
       if(Array.isArray(m.call_members)){handleCallState(m.call_members);}
-      systemNotice('You joined as '+esc(myName));
+      if(isReconnect) {
+        systemNotice('Connection restored');
+      } else {
+        systemNotice('You joined as '+esc(myName));
+      }
       updateCallButton();
     }else if(m.type==='member'&&m.member){
-      if(m.action==='join'){members.set(m.member.id,m.member.name);systemNotice(esc(m.member.name)+' joined');}
+      if(m.action==='join'){
+        var isNew = !members.has(m.member.id);
+        members.set(m.member.id,m.member.name);
+        if(isNew){systemNotice(esc(m.member.name)+' joined');}
+      }
       else if(m.action==='leave'){members.delete(m.member.id);systemNotice(esc(m.member.name)+' left');}
       renderRoster();
     }else if(m.type==='msg'&&m.message){
@@ -1856,7 +1866,39 @@ function scheduleReconnect(){
   reconnectTimer=setTimeout(function(){connectWS();},1500);
 }
 
+var wakeLock = null;
+function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  navigator.wakeLock.request('screen')
+    .then(function(lock) {
+      wakeLock = lock;
+      console.log('Screen Wake Lock active');
+    })
+    .catch(function(err) {
+      console.warn('Wake Lock request failed:', err);
+    });
+}
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release()
+      .then(function() {
+        wakeLock = null;
+        console.log('Screen Wake Lock released');
+      })
+      .catch(function(err) {
+        console.error('Wake Lock release failed:', err);
+      });
+  }
+}
+
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && token) {
+    requestWakeLock();
+  }
+});
+
 function leave(){
+  releaseWakeLock();
   if(ws){ws.manualClose=true;try{ws.close();}catch(e){}}
   clearInterval(heartbeatTimer);clearTimeout(reconnectTimer);
   location.reload();

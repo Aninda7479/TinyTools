@@ -34,6 +34,7 @@ pub fn start_chat_room(password: String) -> Result<ChatRoomResult, String> {
             if let Some(url) = state.server_url.clone() {
                 let qr_code_base64 = generate_qr_code_png(&url)?;
                 let port = state.server_port.unwrap_or(0);
+                crate::sleep_preventer::set_chat_awake(true);
                 return Ok(ChatRoomResult {
                     url,
                     qr_code_base64,
@@ -74,6 +75,8 @@ pub fn start_chat_room(password: String) -> Result<ChatRoomResult, String> {
 
     let qr_code_base64 = generate_qr_code_png(&url)?;
 
+    crate::sleep_preventer::set_chat_awake(true);
+
     Ok(ChatRoomResult {
         url,
         qr_code_base64,
@@ -95,6 +98,7 @@ pub fn stop_chat_room() -> Result<(), String> {
         }
     }
     destroy_room()?;
+    crate::sleep_preventer::set_chat_awake(false);
     Ok(())
 }
 
