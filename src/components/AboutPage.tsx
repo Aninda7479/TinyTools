@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Shield, Cpu, Lock, Github, CheckCircle2, Heart, ExternalLink, Star } from "lucide-react";
+import { Shield, Cpu, Lock, Github, CheckCircle2, Heart, ExternalLink, Star, MessageSquare } from "lucide-react";
 import { isTauri } from "../lib/tauri";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -365,7 +365,19 @@ export default function AboutPage() {
             </p>
           </div>
 
-          <div>
+          <div className="flex flex-col gap-2">
+            <motion.a
+              href="https://forms.gle/yCrSkcr2KPENULKs5"
+              target="_blank"
+              rel="noopener noreferrer"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/30 font-medium text-sm transition-all"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Report Bug / Request Feature</span>
+            </motion.a>
+
             <motion.a
               href="https://github.com/Aninda7479"
               target="_blank"
