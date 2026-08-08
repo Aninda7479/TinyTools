@@ -3,7 +3,7 @@ pub const CHAT_HTML: &str = r####"<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TinyTools — E2EE LAN Chat</title>
+<title>TinyTools — E2EE Local Chat</title>
 <style>
 :root{--bg:#0f0f0f;--surface:rgba(255,255,255,.05);--border:rgba(255,255,255,.1);--accent:#60a5fa;--text:#fff;--muted:rgba(255,255,255,.4);--green:#4ade80;--red:#f87171}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -86,7 +86,7 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
 <div id="gate">
   <div class="gate-card">
     <div class="gate-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-    <h1>E2EE LAN Chat</h1>
+    <h1>E2EE Local Chat</h1>
     <p class="subtitle">Encrypted room on your local network</p>
     <div class="lock-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> End-to-end encrypted · nothing is stored</div>
     <div class="field">
@@ -105,7 +105,7 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
 
 <div id="chat">
   <div class="chat-header">
-    <div class="title">E2EE LAN Chat</div>
+    <div class="title">E2EE Local Chat</div>
     <div class="meta" id="memberCount"></div>
     <div class="spacer"></div>
     <span class="pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> E2EE</span>

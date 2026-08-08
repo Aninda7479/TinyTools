@@ -177,7 +177,7 @@ export const sidebarCategories: SidebarCategory[] = [
     features: [
       { icon: Globe, title: "Global Share", tag: "P2P", tool: "global-share" },
       { icon: Download, title: "Global Receive", tag: "P2P", tool: "global-receive" },
-      { icon: MessageCircle, title: "LAN Chat", tag: "E2EE", tool: "lan-chat" },
+      { icon: MessageCircle, title: "Local Chat", tag: "E2EE", tool: "lan-chat" },
       { icon: QrCode, title: "Local Web Portal Send", tag: "Network", tool: "portal-send" },
       { icon: Download, title: "Local Web Portal Receive", tag: "Network", tool: "portal-receive" },
     ],

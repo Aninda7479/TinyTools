@@ -120,7 +120,7 @@ pub fn run() {
             p2p::commands::reject_transfer,
             p2p::commands::cleanup,
             p2p::commands::reveal_in_folder,
-            // E2EE LAN Chat
+            // E2EE Local Chat
             chat::commands::start_chat_room,
             chat::commands::stop_chat_room,
             chat::commands::get_chat_room_status,
