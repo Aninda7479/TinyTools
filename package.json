@@ -9,10 +9,10 @@
     "build:wasm": "cd src-wasm && wasm-pack build --target web --out-dir ../src/lib/wasm",
     "preview": "vite preview",
     "tauri": "tauri",
-    "dev:app": "npm run tauri dev",
-    "build:wasm": "cd src-wasm && wasm-pack build --target web --out-dir ../src/lib/wasm"
+    "dev:app": "npm run tauri dev"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-fs": "^2.0.0",

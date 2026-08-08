@@ -175,7 +175,7 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
   };
 
   return (
-    <ToolPage key={selectedTool} title="Privacy & Metadata" description="Protect sensitive information in images" onProcess={handleProcess} onFilesChange={handleFilesChange} allowWeb={true} previewNode={renderPreviewNode()}>
+    <ToolPage key={selectedTool} title="Privacy & Metadata" description="Protect sensitive information in images" onProcess={handleProcess} onFilesChange={handleFilesChange} allowWeb={true} renderPreview={() => renderPreviewNode()}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (

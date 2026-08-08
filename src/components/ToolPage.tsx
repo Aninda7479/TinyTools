@@ -20,7 +20,7 @@ export default function ToolPage({
   multiFile = false,
   onFilesChange,
   allowWeb = false,
-  previewNode,
+  renderPreview,
 }: {
   title: string;
   description: string;
@@ -30,7 +30,7 @@ export default function ToolPage({
   multiFile?: boolean;
   onFilesChange?: (files: FileItem[]) => void;
   allowWeb?: boolean;
-  previewNode?: React.ReactNode;
+  renderPreview?: (file: FileItem) => React.ReactNode;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -95,7 +95,7 @@ export default function ToolPage({
             onClick={openPicker}
           >
             {files.length > 0 ? (
-              previewNode ? previewNode : (
+              renderPreview ? renderPreview(files[0]) : (
                 <div className={`flex gap-3 flex-wrap ${multiFile ? "" : ""}`}>
                   {files.map((f, i) => (
                     <div key={i} className="relative group flex flex-col items-center">

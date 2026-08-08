@@ -2016,6 +2016,16 @@ dependencies = [
 
 [[package]]
 name = "gif"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ae047235e33e2829703574b54fdec96bfbad892062d97fed2f76022287de61b"
+dependencies = [
+ "color_quant",
+ "weezl 0.1.12",
+]
+
+[[package]]
+name = "gif"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
@@ -2554,6 +2564,21 @@ dependencies = [
 
 [[package]]
 name = "image"
+version = "0.24.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5690139d2f55868e080017335e4b94cb7414274c74f1669c84fb5feba2c9f69d"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "color_quant",
+ "gif 0.13.3",
+ "jpeg-decoder",
+ "num-traits",
+ "png 0.17.16",
+]
+
+[[package]]
+name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
@@ -2562,7 +2587,7 @@ dependencies = [
  "byteorder-lite",
  "color_quant",
  "exr",
- "gif",
+ "gif 0.14.2",
  "image-webp",
  "moxcms",
  "num-traits",
@@ -2581,7 +2606,7 @@ name = "image-core"
 version = "0.5.2"
 dependencies = [
  "ab_glyph",
- "image",
+ "image 0.25.10",
  "imageproc",
  "serde",
  "serde_json",
@@ -2606,13 +2631,24 @@ dependencies = [
  "ab_glyph",
  "approx",
  "getrandom 0.2.17",
- "image",
+ "image 0.25.10",
  "itertools 0.12.1",
  "nalgebra",
  "num",
  "rand 0.8.7",
  "rand_distr",
  "rayon",
+]
+
+[[package]]
+name = "img-parts"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19734e3c43b2a850f5889c077056e47c874095f2d87e853c7c41214ae67375f0"
+dependencies = [
+ "bytes",
+ "crc32fast",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -3913,7 +3949,7 @@ dependencies = [
  "fax 0.3.0",
  "flate2",
  "getrandom 0.4.3",
- "image",
+ "image 0.25.10",
  "jpeg-decoder",
  "libc",
  "log",
@@ -4312,7 +4348,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 dependencies = [
- "image",
+ "image 0.25.10",
 ]
 
 [[package]]
@@ -4385,7 +4421,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5076,6 +5112,17 @@ dependencies = [
  "serde",
  "serde_core",
  "typeid",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -6164,9 +6211,10 @@ dependencies = [
  "hex",
  "hmac",
  "igd-next",
- "image",
+ "image 0.25.10",
  "image-core",
  "imageproc",
+ "img-parts",
  "jsonwebtoken",
  "kamadak-exif",
  "local-ip-address",
@@ -6199,6 +6247,22 @@ dependencies = [
  "tower-http",
  "urlencoding",
  "xxhash-rust",
+]
+
+[[package]]
+name = "tinytools-wasm"
+version = "0.5.2"
+dependencies = [
+ "ab_glyph",
+ "image 0.24.9",
+ "image-core",
+ "img-parts",
+ "js-sys",
+ "kamadak-exif",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]
