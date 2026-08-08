@@ -1549,234 +1549,6 @@ h1 {
   }
 }
 
-/* Sticker & GIF styles and animations */
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-@keyframes pulse-heart {
-  0%, 100% { transform: scale(1); }
-  25% { transform: scale(1.15); }
-  40% { transform: scale(1.05); }
-  60% { transform: scale(1.2); }
-}
-@keyframes pulse-fire {
-  0%, 100% { transform: scale(1) rotate(-1deg); opacity: 0.95; }
-  50% { transform: scale(1.08) rotate(1deg); opacity: 1; filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.35)); }
-}
-@keyframes shake-party {
-  0%, 100% { transform: rotate(0); }
-  25% { transform: rotate(-6deg) scale(1.05); }
-  75% { transform: rotate(6deg) scale(1.05); }
-}
-@keyframes pop-like {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15) rotate(-3deg); }
-}
-@keyframes fly-rocket {
-  0%, 100% { transform: translateY(0) translateX(0); }
-  50% { transform: translateY(-6px) translateX(3px); }
-}
-@keyframes cry-river {
-  0%, 100% { transform: translateY(0); filter: hue-rotate(0deg); }
-  50% { transform: translateY(3px); filter: hue-rotate(8deg); }
-}
-@keyframes spin-cool {
-  0%, 100% { transform: rotate(0); }
-  50% { transform: rotate(180deg); }
-}
-@keyframes angry-shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-3px) rotate(-2deg); }
-  40%, 80% { transform: translateX(3px) rotate(2deg); }
-}
-@keyframes float-skull {
-  0%, 100% { transform: translateY(0) rotate(0); opacity: 0.85; }
-  50% { transform: translateY(-10px) rotate(2deg); opacity: 1; }
-}
-
-.sticker-anim {
-  display: inline-block;
-  font-size: 3.5rem;
-  line-height: 1;
-  user-select: none;
-}
-.sticker-anim.preview {
-  font-size: 2.2rem;
-  cursor: pointer;
-  transition: transform 0.2s;
-  background: transparent;
-  border: none;
-}
-.sticker-anim.preview:hover {
-  transform: scale(1.2);
-}
-
-.sticker-joy { animation: bounce 1.2s infinite ease-in-out; }
-.sticker-heart { animation: pulse-heart 1s infinite ease-in-out; }
-.sticker-fire { animation: pulse-fire 0.8s infinite ease-in-out; }
-.sticker-party { animation: shake-party 0.6s infinite linear; }
-.sticker-like { animation: pop-like 1.2s infinite ease-in-out; }
-.sticker-rocket { animation: fly-rocket 1s infinite ease-in-out; }
-.sticker-cry { animation: cry-river 1.5s infinite ease-in-out; }
-.sticker-love { animation: pulse-heart 1.2s infinite ease-in-out; }
-.sticker-cool { animation: spin-cool 3s infinite ease-in-out; }
-.sticker-angry { animation: angry-shake 0.5s infinite ease-in-out; }
-.sticker-skull { animation: float-skull 2s infinite ease-in-out; }
-.sticker-think { animation: bounce 1.8s infinite ease-in-out; }
-
-.sticker-panel {
-  display: none;
-  position: absolute;
-  bottom: 85px;
-  left: 20px;
-  width: 320px;
-  height: 380px;
-  background: rgba(15, 15, 22, 0.95);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--border);
-  border-radius: 1.5rem;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  z-index: 100;
-  flex-direction: column;
-  overflow: hidden;
-  animation: panelSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes panelSlideUp {
-  from { transform: translateY(10px) scale(0.95); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-.sticker-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.sticker-panel-head .tabs {
-  display: flex;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 0.2rem;
-  border-radius: 0.6rem;
-  gap: 0.15rem;
-}
-
-.sticker-panel-head .tabs .tab-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.3rem 0.75rem;
-  border-radius: 0.45rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.sticker-panel-head .tabs .tab-btn.active {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-
-.sticker-panel-head .close-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 1.25rem;
-  cursor: pointer;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.sticker-panel-head .close-btn:hover {
-  color: #fff;
-}
-
-.sticker-panel-body {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-}
-
-.tab-content {
-  display: none;
-  position: absolute;
-  inset: 0;
-  padding: 0.75rem;
-  overflow-y: auto;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.tab-content.active {
-  display: flex;
-}
-
-.stickers-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.6rem;
-  justify-items: center;
-  align-items: center;
-  padding: 0.25rem 0;
-}
-
-#gifSearchInput {
-  width: 100%;
-  padding: 0.55rem 0.85rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-  color: #fff;
-  font-size: 0.8rem;
-  outline: none;
-  transition: all 0.2s;
-}
-
-#gifSearchInput:focus {
-  border-color: var(--border-focus);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.gifs-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
-  padding-bottom: 0.5rem;
-}
-
-.gif-item {
-  border-radius: 0.6rem;
-  overflow: hidden;
-  cursor: pointer;
-  aspect-ratio: 4/3;
-  border: 1px solid var(--border);
-  background: #0d0d12;
-  transition: border-color 0.2s, transform 0.2s;
-}
-
-.gif-item:hover {
-  border-color: var(--border-focus);
-  transform: scale(1.02);
-}
-
-.gif-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.bubble.sticker-bubble {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0.25rem !important;
-}
-
 .bubble.gif-bubble {
   background: transparent !important;
   border: none !important;
@@ -1876,31 +1648,10 @@ h1 {
     </div>
     
     <div class="chat-main">
-      <div id="stickerPanel" class="sticker-panel">
-        <div class="sticker-panel-head">
-          <div class="tabs">
-            <button class="tab-btn active" id="tabSticker" onclick="setPickerTab('sticker')">Stickers</button>
-            <button class="tab-btn" id="tabGif" onclick="setPickerTab('gif')">GIFs</button>
-          </div>
-          <button class="close-btn" onclick="toggleStickerPanel()">&times;</button>
-        </div>
-        <div class="sticker-panel-body">
-          <div id="stickerTabContent" class="tab-content active">
-            <div class="stickers-grid" id="stickersGrid"></div>
-          </div>
-          <div id="gifTabContent" class="tab-content">
-            <input type="text" id="gifSearchInput" placeholder="Search animated GIFs..." oninput="onGifSearch(this.value)">
-            <div class="gifs-grid" id="gifsGrid"></div>
-          </div>
-        </div>
-      </div>
       <div class="messages" id="messages"></div>
       <div class="composer">
         <div class="pending" id="pending"></div>
         <div class="composer-row">
-          <button class="btn-attach" id="emojiStickerBtn" onclick="toggleStickerPanel()" title="Stickers & GIFs">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-          </button>
           <button class="btn-attach" onclick="document.getElementById('fileInput').click()" title="Attach file">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
           </button>
@@ -2133,20 +1884,23 @@ function renderText(own,sender,text,ts){
   var initials = getInitials(sender);
   
   var bubbleContent = '';
-  var stickerMatch = text.match(/^\[sticker:([a-z0-9-]+):(.*)\]$/);
-  if (stickerMatch) {
-    var stickerId = stickerMatch[1];
-    var stickerEmoji = stickerMatch[2];
-    bubbleContent = '<div class="bubble sticker-bubble"><span class="sticker-anim ' + esc(stickerId) + '">' + esc(stickerEmoji) + '</span></div>';
+  var trimmed = text.trim();
+  var isGifUrl = false;
+  if (trimmed.match(/^https?:\/\/[^\s]+$/i)) {
+    if (trimmed.match(/\.(gif|png|jpe?g|webp)(\?.*)?$/i) || 
+        trimmed.match(/^https?:\/\/[a-zA-Z0-9.-]+\.giphy\.com\//i) || 
+        trimmed.startsWith('https://media.giphy.com/')) {
+      isGifUrl = true;
+    }
+  }
+  
+  if (isGifUrl) {
+    bubbleContent = '<div class="bubble gif-bubble"><img src="' + esc(trimmed) + '" alt="gif" referrerpolicy="no-referrer"></div>';
   } else {
     var gifMatch = text.match(/^\[gif:(.*)\]$/);
     if (gifMatch) {
       var gifUrl = gifMatch[1];
-      if (gifUrl.match(/^https?:\/\/[a-zA-Z0-9.-]+\.giphy\.com\//) || gifUrl.startsWith('https://media.giphy.com/')) {
-        bubbleContent = '<div class="bubble gif-bubble"><img src="' + esc(gifUrl) + '" alt="gif" referrerpolicy="no-referrer"></div>';
-      } else {
-        bubbleContent = '<div class="bubble">' + esc(text) + '</div>';
-      }
+      bubbleContent = '<div class="bubble gif-bubble"><img src="' + esc(gifUrl) + '" alt="gif" referrerpolicy="no-referrer"></div>';
     } else {
       bubbleContent = '<div class="bubble">' + esc(text) + '</div>';
     }
@@ -2795,152 +2549,6 @@ window.toggleCam=toggleCam;
 window.toggleCallFullscreen=toggleCallFullscreen;
 window.changeCallLayout=changeCallLayout;
 window.toggleRoster=toggleRoster;
-
-// Sticker & GIF Picker JS Logic
-var stickerList = [
-  { id: 'sticker-joy', emoji: '😂' },
-  { id: 'sticker-heart', emoji: '❤️' },
-  { id: 'sticker-fire', emoji: '🔥' },
-  { id: 'sticker-party', emoji: '🎉' },
-  { id: 'sticker-like', emoji: '👍' },
-  { id: 'sticker-rocket', emoji: '🚀' },
-  { id: 'sticker-cry', emoji: '😭' },
-  { id: 'sticker-love', emoji: '😍' },
-  { id: 'sticker-cool', emoji: '😎' },
-  { id: 'sticker-angry', emoji: '😡' },
-  { id: 'sticker-skull', emoji: '💀' },
-  { id: 'sticker-think', emoji: '🤔' }
-];
-
-function initStickersGrid() {
-  var grid = $('stickersGrid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  stickerList.forEach(function(st) {
-    var btn = document.createElement('button');
-    btn.className = 'sticker-anim preview ' + st.id;
-    btn.textContent = st.emoji;
-    btn.onclick = function() {
-      sendSticker(st.id, st.emoji);
-    };
-    grid.appendChild(btn); 
-  });
-}
-
-function toggleStickerPanel() {
-  var panel = $('stickerPanel');
-  if (!panel) return;
-  var display = window.getComputedStyle(panel).display;
-  if (display === 'none') {
-    panel.style.display = 'flex';
-    var grid = $('gifsGrid');
-    if (grid && !grid.innerHTML) {
-      fetchGifs('');
-    }
-  } else {
-    panel.style.display = 'none';
-  }
-}
-
-function setPickerTab(tab) {
-  var stTab = $('stickerTabContent');
-  var gifTab = $('gifTabContent');
-  var stBtn = $('tabSticker');
-  var gifBtn = $('tabGif');
-  if (tab === 'sticker') {
-    stTab.classList.add('active');
-    gifTab.classList.remove('active');
-    stBtn.classList.add('active');
-    gifBtn.classList.remove('active');
-  } else {
-    gifTab.classList.add('active');
-    stTab.classList.remove('active');
-    gifBtn.classList.add('active');
-    stBtn.classList.remove('active');
-    var grid = $('gifsGrid');
-    if (grid && !grid.innerHTML) {
-      fetchGifs('');
-    }
-  }
-}
-
-function sendSticker(stickerId, emoji) {
-  if(!ws||ws.readyState!==1){systemNotice('Not connected');return;}
-  var text = '[sticker:' + stickerId + ':' + emoji + ']';
-  encText(text).then(function(enc){
-    ws.send(JSON.stringify({type:'msg',kind:'text',nonce:enc.n,ciphertext:enc.c}));
-  });
-  toggleStickerPanel();
-}
-
-function sendGif(gifUrl) {
-  if(!ws||ws.readyState!==1){systemNotice('Not connected');return;}
-  var text = '[gif:' + gifUrl + ']';
-  encText(text).then(function(enc){
-    ws.send(JSON.stringify({type:'msg',kind:'text',nonce:enc.n,ciphertext:enc.c}));
-  });
-  toggleStickerPanel();
-}
-
-var gifSearchTimeout = null;
-function onGifSearch(query) {
-  clearTimeout(gifSearchTimeout);
-  gifSearchTimeout = setTimeout(function() {
-    fetchGifs(query);
-  }, 400);
-}
-
-function fetchGifs(query) {
-  var apiKey = 'dc6zaTOxFJmzC';
-  var url = query.trim() 
-    ? 'https://api.giphy.com/v1/gifs/search?q=' + encodeURIComponent(query) + '&api_key=' + apiKey + '&limit=10&rating=g'
-    : 'https://api.giphy.com/v1/gifs/trending?api_key=' + apiKey + '&limit=10&rating=g';
-  var grid = $('gifsGrid');
-  if (!grid) return;
-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;font-size:0.75rem;color:var(--text-muted);padding:1rem;">Loading GIFs...</div>';
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-      grid.innerHTML = '';
-      if (res && res.data && res.data.length > 0) {
-        res.data.forEach(function(gif) {
-          var previewUrl = gif.images.fixed_height_small.url;
-          var sendUrl = gif.images.downsized_medium.url || gif.images.fixed_height.url;
-          var div = document.createElement('div');
-          div.className = 'gif-item';
-          var img = document.createElement('img');
-          img.src = previewUrl;
-          img.alt = 'gif';
-          div.appendChild(img);
-          div.onclick = function() {
-            sendGif(sendUrl);
-          };
-          grid.appendChild(div);
-        });
-      } else {
-        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;font-size:0.75rem;color:var(--text-muted);padding:1rem;">No GIFs found</div>';
-      }
-    })
-    .catch(function() {
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;font-size:0.75rem;color:var(--text-muted);padding:1rem;">Could not load GIFs. Check your internet connection.</div>';
-    });
-}
-
-document.addEventListener('click', function(e) {
-  var panel = $('stickerPanel');
-  var btn = $('emojiStickerBtn');
-  if (panel && btn && panel.style.display === 'flex') {
-    if (!panel.contains(e.target) && !btn.contains(e.target)) {
-      panel.style.display = 'none';
-    }
-  }
-});
-
-initStickersGrid();
-
-window.toggleStickerPanel = toggleStickerPanel;
-window.setPickerTab = setPickerTab;
-window.onGifSearch = onGifSearch;
 
 $('password').focus();
 })();
