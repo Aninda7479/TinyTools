@@ -2603,7 +2603,7 @@ dependencies = [
 
 [[package]]
 name = "image-core"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "ab_glyph",
  "image 0.25.10",
@@ -6190,7 +6190,7 @@ dependencies = [
 
 [[package]]
 name = "tinytools"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "ab_glyph",
  "adler",
