@@ -23,6 +23,39 @@ export function splitEquation(input: string): SplitEquation {
 }
 
 /**
+ * Normalizes a function or equation expression for graphing.
+ * E.g., "y = x^2 + x + 2" -> "x^2 + x + 2"
+ *       "f(x) = x^2 + x + 2" -> "x^2 + x + 2"
+ *       "x^2 + x + 2 = y" -> "x^2 + x + 2"
+ *       "2x + 3 = 7" -> "(2x + 3) - (7)"
+ */
+export function parseGraphExpr(input: string): string {
+  const s = input.trim();
+  if (!s) return "";
+
+  // Strip common assignment prefixes if present without any other '='
+  const cleanAssign = s.replace(/^(?:y|f\([a-zA-Z]\)|y\([a-zA-Z]\)|g\([a-zA-Z]\))\s*=\s*/i, "");
+  if (!cleanAssign.includes("=")) {
+    return cleanAssign;
+  }
+
+  const { lhs, rhs } = splitEquation(s);
+  const lClean = lhs.trim().toLowerCase();
+  const rClean = rhs.trim().toLowerCase();
+
+  // If LHS is y or function notation f(x)
+  if (lClean === "y" || /^[a-z]\([a-z]\)$/.test(lClean)) {
+    return rhs;
+  }
+  // If RHS is y or function notation f(x)
+  if (rClean === "y" || /^[a-z]\([a-z]\)$/.test(rClean)) {
+    return lhs;
+  }
+
+  return `(${lhs}) - (${rhs})`;
+}
+
+/**
  * Detect unknown identifiers in expressions.
  * When `allowE` is true, single-letter `e` is kept as a variable (used for formula solving
  * like `E = m*c^2`), while named constants pi/tau/phi/inf remain reserved.

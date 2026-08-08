@@ -4,6 +4,7 @@ import {
   Plus, Trash2, Crosshair, ZoomIn, ZoomOut, Move, Sun, Grid3X3, Pipette,
 } from "lucide-react";
 import { evalExpression, tryEval } from "../lib/calc-engine";
+import { parseGraphExpr } from "../lib/calc-solve";
 
 interface GraphFunction {
   id: number;
@@ -75,7 +76,8 @@ export default function GraphCalculator() {
     const map: Record<number, string> = {};
     for (const fn of functions) {
       if (!fn.expr.trim()) continue;
-      const r = tryEval(fn.expr, { variables: { x: 0 }, degrees: false });
+      const parsed = parseGraphExpr(fn.expr);
+      const r = tryEval(parsed, { variables: { x: 0 }, degrees: false });
       if (!r.ok) map[fn.id] = r.error;
     }
     return map;
@@ -190,6 +192,7 @@ export default function GraphCalculator() {
     const samples = Math.max(200, Math.min(1200, w * 2));
     for (const fn of functions) {
       if (!fn.expr.trim() || errors[fn.id]) continue;
+      const parsed = parseGraphExpr(fn.expr);
       const color = fn.color;
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
@@ -200,7 +203,7 @@ export default function GraphCalculator() {
         const x = xMin + (i / samples) * (xMax - xMin);
         let y: number;
         try {
-          y = evalExpression(fn.expr, { variables: { x }, degrees: false });
+          y = evalExpression(parsed, { variables: { x }, degrees: false });
         } catch {
           y = NaN;
         }
@@ -295,10 +298,11 @@ export default function GraphCalculator() {
       let yMax = -Infinity;
       for (const fn of functions) {
         if (!fn.expr.trim() || errors[fn.id]) continue;
+        const parsed = parseGraphExpr(fn.expr);
         for (let i = 0; i <= 400; i++) {
           const x = v.xMin + (i / 400) * (v.xMax - v.xMin);
           try {
-            const y = evalExpression(fn.expr, { variables: { x }, degrees: false });
+            const y = evalExpression(parsed, { variables: { x }, degrees: false });
             if (Number.isFinite(y) && Math.abs(y) < 1e7) {
               if (y < yMin) yMin = y;
               if (y > yMax) yMax = y;

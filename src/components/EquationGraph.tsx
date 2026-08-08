@@ -1,7 +1,8 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { ZoomIn, ZoomOut, Sun, Grid3X3, RotateCcw } from "lucide-react";
-import { splitEquation, detectVariables, makeEquationFunction, findRoots, fmtCoeff } from "../lib/calc-solve";
+import { splitEquation, detectVariables, findRoots, fmtCoeff, parseGraphExpr } from "../lib/calc-solve";
+import { evalExpression } from "../lib/calc-engine";
 
 interface View {
   xMin: number;
@@ -50,14 +51,36 @@ export default function EquationGraph({ equation }: { equation: string }) {
   const [hover, setHover] = useState<{ px: number; py: number; x: number; y: number } | null>(null);
 
   const analysis = useMemo<GraphAnalysis | { error: string }>(() => {
+    if (!equation.trim()) return { error: "Enter an equation or function to graph." };
+    const expr = parseGraphExpr(equation);
     const { lhs, rhs } = splitEquation(equation);
-    const vars = detectVariables([lhs, rhs]);
-    if (vars.length === 0) return { error: "No variable found. Use a single variable like x." };
-    if (vars.length > 1) return { error: `Multiple variables found: ${vars.join(", ")}. Use a single variable like x.` };
-    const variable = vars[0];
-    const f = makeEquationFunction(lhs, rhs, variable);
-    const roots = findRoots(f);
-    return { variable, f, roots, label: `${lhs} − (${rhs})` };
+    const vars = detectVariables([expr]);
+    let variable = vars[0] || "x";
+
+    if (vars.length > 1) {
+      return { error: `Multiple variables found: ${vars.join(", ")}. Use a single variable like x.` };
+    }
+
+    try {
+      const f = (x: number) => evalExpression(expr, { variables: { [variable]: x } });
+      const testVal = f(0);
+      if (typeof testVal !== "number" || Number.isNaN(testVal)) {
+        return { error: "Could not evaluate equation." };
+      }
+      const roots = findRoots(f);
+
+      let label = equation.trim();
+      const lClean = lhs.trim().toLowerCase();
+      if (lClean === "y" || /^[a-z]\([a-z]\)$/.test(lClean)) {
+        label = `y = ${rhs.trim()}`;
+      } else if (!equation.includes("=")) {
+        label = `y = ${equation.trim()}`;
+      }
+
+      return { variable, f, roots, label };
+    } catch (e: any) {
+      return { error: e?.message || "Could not parse equation." };
+    }
   }, [equation]);
 
   // Auto-fit view to the curve + roots when the equation changes
