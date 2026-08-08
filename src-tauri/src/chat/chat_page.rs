@@ -39,6 +39,7 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
 .btn-ghost:hover{color:#fff;border-color:rgba(255,255,255,.25)}
 .ephemeral{text-align:center;font-size:.68rem;color:rgba(250,204,21,.75);background:rgba(250,204,21,.06);border-bottom:1px solid rgba(250,204,21,.15);padding:.35rem .8rem}
 .chat-body{flex:1;display:flex;min-height:0}
+.chat-main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
 .roster{width:210px;border-right:1px solid var(--border);padding:1rem .9rem;overflow-y:auto}
 .roster h3{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.8rem}
 .roster .member{display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;border-radius:.6rem;font-size:.8rem}
@@ -78,6 +79,29 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
 .btn-send{background:rgba(96,165,250,.2);color:var(--accent);border:1px solid rgba(96,165,250,.3);width:42px;height:42px;border-radius:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s}
 .btn-send:hover{background:rgba(96,165,250,.3)}
 .composer-hint{font-size:.62rem;color:rgba(255,255,255,.25);margin-top:.5rem;text-align:center}
+.roster .member .name{flex:1;min-width:0}
+#callPanel{display:none;width:420px;max-width:46%;flex-direction:column;min-height:0;position:relative;border-left:1px solid var(--border);background:rgba(12,12,12,.8)}
+#callPanel.active{display:flex}
+.call-panel-head{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--border)}
+.call-panel-head .t{font-size:.78rem;font-weight:600;color:rgba(255,255,255,.9)}
+.call-panel-head .p{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-panel-body{flex:1;position:relative;min-height:0}
+#remoteVideos{position:absolute;inset:0;display:flex;flex-direction:column;gap:.6rem;padding:.7rem;overflow-y:auto;box-sizing:border-box}
+.remote-cell{position:relative;border-radius:.9rem;overflow:hidden;border:1px solid var(--border);background:#000;flex-shrink:0;aspect-ratio:16/9}
+.remote-cell video{width:100%;height:100%;object-fit:cover}
+.remote-name{position:absolute;bottom:6px;left:8px;font-size:.62rem;color:#fff;background:rgba(0,0,0,.55);padding:.12rem .5rem;border-radius:.4rem;z-index:2}
+#callLocalWrap{position:absolute;top:10px;right:10px;width:150px;height:112px;border-radius:.8rem;overflow:hidden;border:1px solid rgba(255,255,255,.2);z-index:2;background:#111;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+#localVideo{width:100%;height:100%;object-fit:cover}
+#callStatus{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,.75);font-size:.85rem;text-align:center;z-index:3;pointer-events:none;max-width:90%}
+.call-controls{display:flex;gap:.8rem;justify-content:center;align-items:center;padding:.8rem;border-top:1px solid var(--border)}
+.call-controls button{width:48px;height:48px;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.call-controls button:hover{background:rgba(255,255,255,.18)}
+.call-controls button.danger{background:rgba(248,113,113,.85);border-color:transparent}
+.call-controls button.danger:hover{background:rgba(248,113,113,1)}
+.call-controls button.off{background:rgba(248,113,113,.7);border-color:transparent}
+#joinBar{display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:80;align-items:center;gap:.8rem;background:rgba(96,165,250,.16);border:1px solid rgba(96,165,250,.45);color:#fff;font-size:.82rem;padding:.5rem .6rem .5rem .95rem;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#joinBar button{background:rgba(96,165,250,.35);color:#fff;border:1px solid rgba(96,165,250,.55);padding:.35rem .95rem;border-radius:999px;font-size:.75rem;font-weight:500;cursor:pointer}
+#joinBar button:hover{background:rgba(96,165,250,.5)}
 @media(max-width:719px){.roster{display:none}.msg{max-width:88%}}
 </style>
 </head>
@@ -109,28 +133,59 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
     <div class="meta" id="memberCount"></div>
     <div class="spacer"></div>
     <span class="pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> E2EE</span>
+    <button class="btn-ghost" id="videoCallBtn" onclick="onVideoCallBtn()" title="Video call with the whole room">
+      <svg id="videoCallIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg><span id="videoCallLabel">Start Video Call</span>
+    </button>
     <button class="btn-ghost" onclick="leave()">Leave</button>
   </div>
   <div class="ephemeral">Ephemeral chat — messages and files are never stored. Closing the room erases everything.</div>
+  <div id="joinBar">
+    <span id="joinBarText"></span>
+    <button id="joinBarBtn" onclick="joinCall()">Join</button>
+  </div>
   <div class="chat-body">
     <div class="roster">
       <h3 id="rosterTitle">Members</h3>
       <div id="rosterList"></div>
     </div>
-    <div class="messages" id="messages"></div>
-  </div>
-  <div class="composer">
-    <div class="pending" id="pending"></div>
-    <div class="composer-row">
-      <button class="btn-attach" onclick="document.getElementById('fileInput').click()" title="Attach file">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-      </button>
-      <textarea id="input" placeholder="Type a message... (Enter to send)" rows="1"></textarea>
-      <button class="btn-send" onclick="send()" title="Send">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-      </button>
+    <div class="chat-main">
+      <div class="messages" id="messages"></div>
+      <div class="composer">
+        <div class="pending" id="pending"></div>
+        <div class="composer-row">
+          <button class="btn-attach" onclick="document.getElementById('fileInput').click()" title="Attach file">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea id="input" placeholder="Type a message... (Enter to send)" rows="1"></textarea>
+          <button class="btn-send" onclick="send()" title="Send">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+          </button>
+        </div>
+        <div class="composer-hint">Drag &amp; drop or paste images / files to share · files relayed in memory and auto-expire</div>
+      </div>
     </div>
-    <div class="composer-hint">Drag &amp; drop or paste images / files to share · files relayed in memory and auto-expire</div>
+    <div id="callPanel">
+      <div class="call-panel-head">
+        <span class="t">Video Call</span>
+        <span class="p" id="callParticipantCount"></span>
+      </div>
+      <div class="call-panel-body">
+        <div id="remoteVideos"></div>
+        <div id="callLocalWrap"><video id="localVideo" autoplay muted playsinline></video></div>
+        <div id="callStatus"></div>
+      </div>
+      <div class="call-controls">
+        <button id="btnMute" onclick="toggleMute()" title="Mute microphone">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        </button>
+        <button id="btnCam" onclick="toggleCam()" title="Turn camera off">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg>
+        </button>
+        <button class="danger" onclick="leaveCall()" title="Leave the video call">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -145,6 +200,7 @@ var heartbeatTimer=null, reconnectTimer=null, joining=false;
 var members=new Map();
 var filesCache=new Map();
 var pendingFiles=[];
+var pcList={}, localStream=null, callMembers={}, inCall=false, callActive=false, micMuted=false, camOff=false;
 
 function b64(u8){var c=new Uint8Array(u8),s='';for(var i=0;i<c.length;i+=0x8000){s+=String.fromCharCode.apply(null,c.subarray(i,i+0x8000));}return btoa(s);}
 function fromB64(s){var bin=atob(s),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++){u[i]=bin.charCodeAt(i);}return u;}
@@ -205,13 +261,19 @@ function connectWS(){
     if(m.type==='welcome'){
       if(m.client_id){clientId=m.client_id;}
       if(Array.isArray(m.members)){members=new Map(m.members.map(function(x){return[x.id,x.name];}));renderRoster();}
+      if(Array.isArray(m.call_members)){handleCallState(m.call_members);}
       systemNotice('You joined as '+esc(myName));
+      updateCallButton();
     }else if(m.type==='member'&&m.member){
       if(m.action==='join'){members.set(m.member.id,m.member.name);systemNotice(esc(m.member.name)+' joined');}
       else if(m.action==='leave'){members.delete(m.member.id);systemNotice(esc(m.member.name)+' left');}
       renderRoster();
     }else if(m.type==='msg'&&m.message){
       handleMessage(m.message);
+    }else if(m.type==='signal'&&m.signal){
+      handleSignal(m.client_id,m.name,m.signal);
+    }else if(m.type==='call-state'&&Array.isArray(m.call_members)){
+      handleCallState(m.call_members);
     }else if(m.type==='ping'){
       if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'pong'}));}
     }else if(m.type==='error'){
@@ -220,6 +282,7 @@ function connectWS(){
   };
   socket.onclose=function(){
     clearInterval(heartbeatTimer);
+    if(inCall){teardownCall();}
     if(!socket.manualClose){
       systemNotice('Connection lost — reconnecting...');
       scheduleReconnect();
@@ -326,7 +389,7 @@ function systemNotice(text){
 
 function renderRoster(){
   var list=$('rosterList');list.innerHTML='';
-  members.forEach(function(name){
+  members.forEach(function(name,id){
     var d=document.createElement('div');d.className='member';
     var dot=document.createElement('span');dot.className='dot';
     var n=document.createElement('span');n.className='name';n.textContent=name;
@@ -423,6 +486,227 @@ function attachFiles(fileList){
   if(pendingFiles.length){renderPending();}
 }
 
+// ── Room-wide video call (WebRTC mesh, P2P media over the local network) ──
+function wsSendSignal(to,signal){
+  if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'signal',to:to,signal:signal}));}
+}
+
+function callMsg(action){
+  if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'call',action:action}));}
+}
+
+function startMedia(){
+  if(localStream){return Promise.resolve(localStream);}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){return Promise.reject(new Error('Camera/microphone are not available in this browser'));}
+  return navigator.mediaDevices.getUserMedia({video:true,audio:true});
+}
+
+function onVideoCallBtn(){
+  if(inCall){leaveCall();}
+  else if(callActive){joinCall();}
+  else{startCall();}
+}
+
+function updateCallButton(){
+  var btn=$('videoCallBtn'), lbl=$('videoCallLabel');
+  if(!btn){return;}
+  if(inCall){lbl.textContent='Leave Call';btn.title='Leave the video call';}
+  else if(callActive){lbl.textContent='Join Video Call';btn.title='Join the room video call';}
+  else{lbl.textContent='Start Video Call';btn.title='Start a video call the whole room can join';}
+}
+
+function startCall(){
+  if(inCall){return;}
+  hideJoinBar();
+  startMedia().then(function(stream){
+    localStream=stream;
+    inCall=true;callActive=true;
+    $('localVideo').srcObject=stream;
+    $('callPanel').classList.add('active');
+    $('callStatus').textContent='Waiting for others to join...';
+    $('callStatus').style.display='block';
+    updateParticipantCount();
+    updateCallButton();
+    callMsg('join');
+    systemNotice('Video call started — anyone in the room can join');
+  }).catch(function(e){
+    systemNotice('Could not start video call: '+esc(e.message||'error'));
+  });
+}
+
+function joinCall(){
+  if(inCall){return;}
+  hideJoinBar();
+  startMedia().then(function(stream){
+    localStream=stream;
+    inCall=true;callActive=true;
+    $('localVideo').srcObject=stream;
+    $('callPanel').classList.add('active');
+    $('callStatus').textContent='Connecting...';
+    $('callStatus').style.display='block';
+    updateParticipantCount();
+    updateCallButton();
+    callMsg('join');
+    systemNotice('You joined the video call');
+  }).catch(function(e){
+    systemNotice('Could not join video call: '+esc(e.message||'error'));
+  });
+}
+
+function leaveCall(){
+  if(!inCall){return;}
+  callMsg('leave');
+  teardownCall();
+  updateCallButton();
+}
+
+function teardownCall(){
+  inCall=false;
+  Object.keys(pcList).forEach(function(id){closePeer(id);});
+  if(localStream){localStream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}
+  localStream=null;
+  $('callPanel').classList.remove('active');
+  $('localVideo').srcObject=null;
+  $('callStatus').style.display='none';
+  micMuted=false;camOff=false;
+}
+
+function handleCallState(memberList){
+  var next={};
+  memberList.forEach(function(x){next[x.id]=x.name;});
+  callMembers=next;
+  callActive=Object.keys(callMembers).length>0;
+  if(!callActive){
+    hideJoinBar();
+    if(inCall){teardownCall();}
+  }else if(inCall){
+    hideJoinBar();
+    Object.keys(callMembers).forEach(function(id){
+      if(id===clientId)return;
+      if(!pcList[id]){syncPeer(id,callMembers[id]);}
+    });
+    Object.keys(pcList).forEach(function(id){
+      if(!callMembers[id]){closePeer(id);}
+    });
+  }else{
+    showJoinBar();
+  }
+  updateCallButton();
+  updateParticipantCount();
+}
+
+function showJoinBar(){
+  var names=Object.keys(callMembers).map(function(id){return callMembers[id];});
+  var text=names.length===1?(names[0]+' started a video call'):('A video call is in progress — '+names.length+' participant'+(names.length===1?'':'s'));
+  $('joinBarText').textContent=text;
+  $('joinBar').style.display='flex';
+}
+
+function hideJoinBar(){$('joinBar').style.display='none';}
+
+function syncPeer(id,name){
+  if(id===clientId||pcList[id])return;
+  // Smaller client_id offers; the larger side waits for the offer.
+  if(clientId<id){createOfferTo(id,name);}
+}
+
+function createPeer(id,name){
+  var p=new RTCPeerConnection();
+  localStream.getTracks().forEach(function(t){p.addTrack(t,localStream);});
+  var cell=document.createElement('div');cell.className='remote-cell';cell.id='rcell-'+id;
+  cell.innerHTML='<div class="remote-name">'+esc(name)+'</div><video id="rvideo-'+id+'" autoplay playsinline></video>';
+  $('remoteVideos').appendChild(cell);
+  p.onicecandidate=function(ev){
+    if(ev.candidate){wsSendSignal(id,{kind:'ice',candidate:ev.candidate});}
+  };
+  p.ontrack=function(ev){
+    var v=$('rvideo-'+id);
+    if(v&&ev.streams&&ev.streams[0]){v.srcObject=ev.streams[0];}
+    $('callStatus').style.display='none';
+  };
+  p.onconnectionstatechange=function(){
+    if(p.connectionState==='disconnected'||p.connectionState==='failed'||p.connectionState==='closed'){
+      closePeer(id);
+    }
+  };
+  pcList[id]={pc:p,name:name};
+  updateParticipantCount();
+  return pcList[id];
+}
+
+function closePeer(id){
+  var p=pcList[id];
+  if(p){try{p.pc.close();}catch(e){}}
+  delete pcList[id];
+  var c=$('rcell-'+id);if(c){c.remove();}
+  updateParticipantCount();
+}
+
+function createOfferTo(id,name){
+  if(pcList[id])return;
+  var p=createPeer(id,name);
+  p.pc.createOffer().then(function(o){
+    return p.pc.setLocalDescription(o);
+  }).then(function(){
+    wsSendSignal(id,{kind:'offer',offer:p.pc.localDescription});
+  }).catch(function(){closePeer(id);});
+}
+
+function handleSignal(fromId,fromName,s){
+  if(!s||!s.kind)return;
+  var kind=s.kind;
+  if(kind==='offer'){
+    if(!inCall||pcList[fromId])return;
+    var p=createPeer(fromId,fromName);
+    p.pc.setRemoteDescription(s.offer).then(function(){
+      return p.pc.createAnswer();
+    }).then(function(ans){
+      return p.pc.setLocalDescription(ans);
+    }).then(function(){
+      wsSendSignal(fromId,{kind:'answer',answer:p.pc.localDescription});
+    }).catch(function(){closePeer(fromId);});
+  }else if(kind==='answer'){
+    if(pcList[fromId]&&pcList[fromId].pc){
+      pcList[fromId].pc.setRemoteDescription(s.answer).catch(function(){closePeer(fromId);});
+    }
+  }else if(kind==='ice'){
+    if(pcList[fromId]&&pcList[fromId].pc){
+      pcList[fromId].pc.addIceCandidate(s.candidate).catch(function(){});
+    }
+  }
+}
+
+function updateParticipantCount(){
+  var el=$('callParticipantCount');
+  if(!el){return;}
+  var n=Object.keys(pcList).length+(inCall?1:0);
+  el.textContent=n>0?(n+' participant'+(n===1?'':'s')):'';
+  if(inCall){
+    if(Object.keys(pcList).length===0){
+      $('callStatus').textContent='Waiting for others to join...';
+      $('callStatus').style.display='block';
+    }else{
+      $('callStatus').style.display='none';
+    }
+  }
+}
+
+function toggleMute(){
+  if(!localStream){return;}
+  micMuted=!micMuted;
+  localStream.getAudioTracks().forEach(function(t){t.enabled=!micMuted;});
+  $('btnMute').classList.toggle('off',micMuted);
+  $('btnMute').title=micMuted?'Unmute microphone':'Mute microphone';
+}
+
+function toggleCam(){
+  if(!localStream){return;}
+  camOff=!camOff;
+  localStream.getVideoTracks().forEach(function(t){t.enabled=!camOff;});
+  $('btnCam').classList.toggle('off',camOff);
+  $('btnCam').title=camOff?'Turn camera on':'Turn camera off';
+}
+
 document.addEventListener('dragover',function(e){e.preventDefault();});
 document.addEventListener('drop',function(e){
   e.preventDefault();
@@ -454,6 +738,12 @@ window.join=join;
 window.send=send;
 window.leave=leave;
 window.onFilesSelected=onFilesSelected;
+window.onVideoCallBtn=onVideoCallBtn;
+window.startCall=startCall;
+window.joinCall=joinCall;
+window.leaveCall=leaveCall;
+window.toggleMute=toggleMute;
+window.toggleCam=toggleCam;
 $('password').focus();
 })();
 </script>

@@ -28,6 +28,8 @@ pub struct Room {
     pub connections: HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>,
     /// In-memory encrypted file blobs (never written to disk)
     pub files: HashMap<String, FileBlob>,
+    /// Who is currently in the room-wide video call (client_id -> member)
+    pub call_members: HashMap<String, MemberInfo>,
     pub broadcast: tokio::sync::broadcast::Sender<RoomEvent>,
 }
 
@@ -69,7 +71,7 @@ pub struct ChatMessage {
 #[derive(Clone, serde::Serialize)]
 pub struct RoomEvent {
     #[serde(rename = "type")]
-    pub kind: String, // "welcome" | "member" | "msg" | "system" | "error"
+    pub kind: String, // "welcome" | "member" | "msg" | "signal" | "system" | "error"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,11 +86,25 @@ pub struct RoomEvent {
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    /// For WebRTC signaling: the intended recipient client_id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<String>,
+    /// For WebRTC signaling: opaque JSON payload relayed P2P.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signal: Option<serde_json::Value>,
+    /// Room-wide video call participants.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call_members: Option<Vec<MemberInfo>>,
     pub ts: u64,
 }
 
 impl RoomEvent {
-    pub fn welcome(client_id: String, name: String, members: Vec<MemberInfo>) -> Self {
+    pub fn welcome(
+        client_id: String,
+        name: String,
+        members: Vec<MemberInfo>,
+        call_members: Vec<MemberInfo>,
+    ) -> Self {
         Self {
             kind: "welcome".to_string(),
             action: None,
@@ -98,6 +114,9 @@ impl RoomEvent {
             client_id: Some(client_id),
             name: Some(name),
             text: None,
+            to: None,
+            signal: None,
+            call_members: Some(call_members),
             ts: now_secs(),
         }
     }
@@ -112,6 +131,9 @@ impl RoomEvent {
             client_id: None,
             name: None,
             text: None,
+            to: None,
+            signal: None,
+            call_members: None,
             ts: now_secs(),
         }
     }
@@ -126,6 +148,43 @@ impl RoomEvent {
             client_id: None,
             name: None,
             text: None,
+            to: None,
+            signal: None,
+            call_members: None,
+            ts: now_secs(),
+        }
+    }
+
+    pub fn signal(from_id: String, from_name: String, to: String, signal: serde_json::Value) -> Self {
+        Self {
+            kind: "signal".to_string(),
+            action: None,
+            member: None,
+            members: None,
+            message: None,
+            client_id: Some(from_id),
+            name: Some(from_name),
+            text: None,
+            to: Some(to),
+            signal: Some(signal),
+            call_members: None,
+            ts: now_secs(),
+        }
+    }
+
+    pub fn call_state(call_members: Vec<MemberInfo>) -> Self {
+        Self {
+            kind: "call-state".to_string(),
+            action: None,
+            member: None,
+            members: None,
+            message: None,
+            client_id: None,
+            name: None,
+            text: None,
+            to: None,
+            signal: None,
+            call_members: Some(call_members),
             ts: now_secs(),
         }
     }
@@ -140,6 +199,9 @@ impl RoomEvent {
             client_id: None,
             name: None,
             text: Some(text),
+            to: None,
+            signal: None,
+            call_members: None,
             ts: now_secs(),
         }
     }
@@ -209,6 +271,7 @@ pub fn create_room(password: String) -> Result<Vec<u8>, String> {
             auth: HashMap::new(),
             connections: HashMap::new(),
             files: HashMap::new(),
+            call_members: HashMap::new(),
             broadcast: tx,
         });
         Ok(salt)
