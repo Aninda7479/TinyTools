@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { MonitorDown, Upload, X, Play } from "lucide-react";
-import { isTauri, pickFiles } from "../lib/tauri";
+import { Upload, X, Play, MonitorDown } from "lucide-react";
+import { pickFiles, isTauri } from "../lib/tauri";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -18,9 +18,9 @@ export default function ToolPage({
   onProcess,
   processLabel,
   multiFile = false,
-  allowWeb = false,
   onFilesChange,
-  previewNode,
+  allowWeb = false,
+  renderPreview,
 }: {
   title: string;
   description: string;
@@ -28,9 +28,9 @@ export default function ToolPage({
   onProcess: (files: FileItem[]) => void;
   processLabel?: string;
   multiFile?: boolean;
-  allowWeb?: boolean;
   onFilesChange?: (files: FileItem[]) => void;
-  previewNode?: React.ReactNode;
+  allowWeb?: boolean;
+  renderPreview?: (file: FileItem) => React.ReactNode;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -40,10 +40,12 @@ export default function ToolPage({
     const picked = await pickFiles(filters);
     if (picked.length === 0) return;
     const newFiles = picked.map((f) => ({ name: f.name, path: f.path, size: f.size }));
-    const updated = multiFile ? [...files, ...newFiles] : newFiles.slice(0, 1);
-    setFiles(updated);
-    onFilesChange?.(updated);
-  }, [multiFile, files, onFilesChange]);
+    setFiles((prev) => {
+      const updated = multiFile ? [...prev, ...newFiles] : newFiles.slice(0, 1);
+      onFilesChange?.(updated);
+      return updated;
+    });
+  }, [multiFile, onFilesChange]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -54,16 +56,9 @@ export default function ToolPage({
     [openPicker]
   );
 
-  const webBlocked = !isTauri() && !allowWeb;
-
   return (
-    <div className="flex flex-col h-full gap-4">
-      <div>
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <p className="text-sm text-white/40 mt-1">{description}</p>
-      </div>
-
-      {webBlocked && (
+    <div className="relative h-full flex flex-col">
+      {!isTauri() && !allowWeb && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-2xl border border-red-500/20 p-8 text-center">
           <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
             <MonitorDown className="w-8 h-8 text-red-400" />
@@ -75,7 +70,13 @@ export default function ToolPage({
         </div>
       )}
 
-      <div className={`flex gap-4 flex-1 min-h-0 ${webBlocked ? "opacity-20 pointer-events-none select-none" : ""}`}>
+      <div className={`flex flex-col h-full gap-4 ${!isTauri() && !allowWeb ? "opacity-20 pointer-events-none select-none" : ""}`}>
+        <div>
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <p className="text-sm text-white/40 mt-1">{description}</p>
+        </div>
+
+      <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: Options */}
         <div className="w-[340px] flex flex-col gap-3 overflow-y-auto pr-1">{children}</div>
 
@@ -94,22 +95,31 @@ export default function ToolPage({
             onClick={openPicker}
           >
             {files.length > 0 ? (
-              <div className={`flex gap-3 flex-wrap ${multiFile ? "" : ""}`}>
-                {files.map((f, i) => (
-                  <div key={i} className="relative group flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
-                      {f.name}
+              renderPreview ? renderPreview(files[0]) : (
+                <div className={`flex gap-3 flex-wrap ${multiFile ? "" : ""}`}>
+                  {files.map((f, i) => (
+                    <div key={i} className="relative group flex flex-col items-center">
+                      <div className="w-24 h-24 rounded-xl bg-white/5 flex items-center justify-center text-[10px] text-white/40 text-center p-2 break-all">
+                        {f.name}
+                      </div>
+                      <button
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setFiles((p) => {
+                            const updated = p.filter((_, j) => j !== i);
+                            onFilesChange?.(updated);
+                            return updated;
+                          }); 
+                        }}
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((_, j) => j !== i)); }}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    <p className="text-[10px] text-white/40 mt-1 truncate w-24 text-center">{f.name}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             ) : (
               <>
                 <Upload className="w-8 h-8 text-white/30" />
@@ -120,22 +130,33 @@ export default function ToolPage({
             )}
           </motion.div>
 
-          {previewNode}
-
           {files.length > 0 && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={spring}
-              onClick={() => onProcess(files)}
-              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
-            >
-              <Play className="w-4 h-4" />
-              {processLabel || `Process ${files.length} file${files.length > 1 ? "s" : ""}`}
-            </motion.button>
+            <div className="flex gap-2">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={spring}
+                onClick={() => onProcess(files)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+              >
+                <Play className="w-4 h-4" />
+                {processLabel || `Process ${files.length} file${files.length > 1 ? "s" : ""}`}
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={spring}
+                onClick={() => { setFiles([]); onFilesChange?.([]); }}
+                className="px-6 flex items-center justify-center py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                title="Reset Image"
+              >
+                <X className="w-4 h-4" />
+              </motion.button>
+            </div>
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

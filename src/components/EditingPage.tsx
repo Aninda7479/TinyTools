@@ -65,7 +65,7 @@ export default function EditingPage({ defaultSub }: { defaultSub?: string } = {}
   };
 
   return (
-    <ToolPage title="Editing & Layout" description="Crop, pad, split, and combine images" onProcess={handleProcess} multiFile={selectedTool === "stitch"}>
+    <ToolPage title="Editing & Layout" description="Crop, pad, split, and combine images" onProcess={handleProcess} multiFile={selectedTool === "stitch"} allowWeb={true}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (

@@ -48,7 +48,7 @@ export default function ConversionPage({ defaultSub }: { defaultSub?: string } =
   };
 
   return (
-    <ToolPage title="Compression & Conversion" description="Optimize and convert image formats" onProcess={handleProcess}>
+    <ToolPage title="Compression & Conversion" description="Optimize and convert image formats" onProcess={handleProcess} allowWeb={true}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (

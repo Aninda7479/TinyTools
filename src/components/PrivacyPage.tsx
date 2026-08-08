@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import ToolPage, { OptionRow, OptionSlider, OptionSelect } from "./ToolPage";
-import { stripMetadata, redactRegions, addWatermark, isTauri } from "../lib/tauri";
+import { stripMetadata, redactRegions, addWatermark, readMetadata, isTauri } from "../lib/tauri";
 
 type PrivacyTool = "strip-metadata" | "redact" | "watermark";
 
@@ -11,6 +11,7 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
   const [watermarkPosition, setWatermarkPosition] = useState("bottom-right");
   const [redactMethod, setRedactMethod] = useState("blur");
   const [status, setStatus] = useState("");
+  const [metadata, setMetadata] = useState<Record<string, string> | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<{name: string, path: string}[]>([]);
   const [regions, setRegions] = useState<[number, number, number, number][]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -33,7 +34,22 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
   const handleFilesChange = async (files: { name: string; path: string }[]) => {
     setSelectedFiles(files);
     setRegions([]);
+    setMetadata(null);
     setStatus("");
+    if (files.length > 0 && selectedTool === "strip-metadata") {
+      try {
+        const result = await readMetadata(files[0].path);
+        if (result.success) {
+          setMetadata(result.metadata);
+        } else {
+          setMetadata(null);
+          setStatus("Failed to read metadata: " + result.message);
+        }
+      } catch (e) {
+        setMetadata(null);
+        setStatus("Error reading file");
+      }
+    }
   };
 
   const handleProcess = async (files: { name: string; path: string }[]) => {
@@ -46,6 +62,7 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
       switch (selectedTool) {
         case "strip-metadata":
           result = await stripMetadata(f.path, out);
+          setMetadata(null);
           break;
         case "redact":
           const finalRegions = regions.length > 0 ? regions : [[50, 50, 100, 100]] as [number, number, number, number][];
@@ -112,20 +129,21 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
   const renderPreviewNode = () => {
     if (selectedTool !== "redact" || selectedFiles.length === 0 || !previewUrl) return undefined;
     return (
-      <div
+      <div 
         className="relative w-full h-full flex items-center justify-center bg-black/40 rounded-xl overflow-hidden cursor-crosshair select-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <img
+        <img 
           ref={imgRef}
-          src={previewUrl}
-          alt="Preview"
+          src={previewUrl} 
+          alt="Preview" 
           className="max-w-full max-h-[300px] object-contain pointer-events-none"
           draggable={false}
         />
+        {/* Draw confirmed regions */}
         {imgRef.current && regions.map((r, i) => {
           const rect = imgRef.current!.getBoundingClientRect();
           const scaleX = rect.width / imgRef.current!.naturalWidth;
@@ -141,6 +159,7 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
             />
           );
         })}
+        {/* Draw current box */}
         {imgRef.current && currentBox && (
           <div className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
             style={{
@@ -156,7 +175,7 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
   };
 
   return (
-    <ToolPage key={selectedTool} title="Privacy & Metadata" description="Protect sensitive information in images" onProcess={handleProcess} onFilesChange={handleFilesChange} allowWeb={true} previewNode={renderPreviewNode()}>
+    <ToolPage key={selectedTool} title="Privacy & Metadata" description="Protect sensitive information in images" onProcess={handleProcess} onFilesChange={handleFilesChange} allowWeb={true} renderPreview={() => renderPreviewNode()}>
       <div className="flex flex-col gap-2">
         <p className="text-xs text-white/40 uppercase tracking-wider">Select Tool</p>
         {tools.map((t) => (
@@ -170,6 +189,36 @@ export default function PrivacyPage({ defaultSub }: { defaultSub?: string } = {}
           </button>
         ))}
       </div>
+
+      {selectedTool === "strip-metadata" && metadata && Object.keys(metadata).length > 0 && (
+        <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2 max-h-64 overflow-y-auto">
+          <p className="text-xs text-white/60 mb-1 flex justify-between">
+            <span>EXIF Data Found:</span>
+            <span className="text-red-400">{Object.keys(metadata).length} tags</span>
+          </p>
+          {Object.entries(metadata).map(([k, v]) => {
+            const isSensitive = k.toLowerCase().includes("gps") || k.toLowerCase().includes("author") || k.toLowerCase().includes("location");
+            return (
+              <div key={k} className="flex justify-between items-center text-[10px] gap-2 border-b border-white/5 pb-1">
+                <span className={`truncate flex-1 ${isSensitive ? "text-red-300" : "text-white/40"}`}>{k}</span>
+                <span className="text-white/80 truncate flex-1 text-right">{v}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedTool === "strip-metadata" && metadata && Object.keys(metadata).length === 0 && (
+        <div className="mt-2 p-3 rounded-xl border border-green-500/20 bg-green-500/10 flex flex-col items-center justify-center py-6 text-center">
+          <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-green-400"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>
+          <p className="text-sm font-medium text-green-400">Image is Clean!</p>
+          <p className="text-xs text-green-400/60 mt-1 max-w-[200px]">
+            No sensitive metadata found. This image is already safe to share.
+          </p>
+        </div>
+      )}
 
       {selectedTool === "redact" && (
         <div className="mt-2 p-3 rounded-xl bg-white/5 border border-border flex flex-col gap-2">
