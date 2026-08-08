@@ -87,7 +87,7 @@ export default function LanChatPage() {
   return (
     <div className="flex flex-col h-full gap-4">
       <div>
-        <h2 className="text-xl font-semibold">LAN Chat</h2>
+        <h2 className="text-xl font-semibold">Local Chat</h2>
         <p className="text-sm text-white/40 mt-1">
           Host an end-to-end encrypted chat room on your local network — text, images & files. No cloud, nothing is stored.
         </p>

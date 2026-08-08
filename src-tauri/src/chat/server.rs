@@ -174,6 +174,15 @@ struct ClientMsg {
     file_size: Option<u64>,
     #[serde(default)]
     mime: Option<String>,
+    /// WebRTC signaling: target recipient client_id.
+    #[serde(default)]
+    to: Option<String>,
+    /// WebRTC signaling: opaque JSON payload relayed only to `to`.
+    #[serde(default)]
+    signal: Option<serde_json::Value>,
+    /// Video-call membership action: "join" | "leave".
+    #[serde(default)]
+    action: Option<String>,
 }
 
 async fn handle_ws(socket: WebSocket, token: String) {
@@ -210,7 +219,7 @@ async fn handle_ws(socket: WebSocket, token: String) {
         }
     });
 
-    // Send "welcome" (roster) directly to this member.
+    // Send "welcome" (roster + current video-call participants) to this member.
     let members: Vec<MemberInfo> = with_room(|r| {
         r.members
             .iter()
@@ -221,7 +230,9 @@ async fn handle_ws(socket: WebSocket, token: String) {
             .collect()
     })
     .unwrap_or_default();
-    let welcome = RoomEvent::welcome(client_id.clone(), name.clone(), members);
+    let call_members: Vec<MemberInfo> = with_room(|r| r.call_members.values().cloned().collect())
+        .unwrap_or_default();
+    let welcome = RoomEvent::welcome(client_id.clone(), name.clone(), members, call_members);
     let _ = msg_tx.send(Message::Text(
         serde_json::to_string(&welcome).unwrap_or_default().into(),
     ));
@@ -291,12 +302,23 @@ async fn handle_ws(socket: WebSocket, token: String) {
             let _ = btx.send(RoomEvent::member(
                 "leave",
                 MemberInfo {
-                    id: client_id,
+                    id: client_id.clone(),
                     name: removed_name,
                 },
             ));
         }
+        let was_in_call =
+            with_room_mut(|r| r.call_members.remove(&client_id).is_some()).unwrap_or(false);
+        if was_in_call {
+            broadcast_call_state(&btx);
+        }
     }
+}
+
+fn broadcast_call_state(btx: &tokio::sync::broadcast::Sender<RoomEvent>) {
+    let call_members: Vec<MemberInfo> = with_room(|r| r.call_members.values().cloned().collect())
+        .unwrap_or_default();
+    let _ = btx.send(RoomEvent::call_state(call_members));
 }
 
 fn handle_client_message(
@@ -336,6 +358,45 @@ fn handle_client_message(
                 ts: now_secs(),
             };
             let _ = btx.send(RoomEvent::message(msg));
+        }
+        "signal" => {
+            // Relay WebRTC signaling to exactly one peer. The server never
+            // inspects the payload — media itself flows P2P between browsers.
+            let Some(to) = parsed.to else { return };
+            let Some(payload) = parsed.signal else { return };
+            let target = with_room(|r| r.connections.get(&to).cloned()).flatten();
+            if let Some(tx) = target {
+                let ev = RoomEvent::signal(client_id.to_string(), name.to_string(), to, payload);
+                let _ = tx.send(Message::Text(
+                    serde_json::to_string(&ev).unwrap_or_default().into(),
+                ));
+            }
+        }
+        "call" => {
+            // Room-wide video call membership. Media itself is peer-to-peer;
+            // the server only keeps the participant list and notifies everyone.
+            let Some(action) = parsed.action.as_deref() else { return };
+            match action {
+                "join" => {
+                    with_room_mut(|r| {
+                        r.call_members.insert(
+                            client_id.to_string(),
+                            MemberInfo {
+                                id: client_id.to_string(),
+                                name: name.to_string(),
+                            },
+                        );
+                    });
+                    broadcast_call_state(btx);
+                }
+                "leave" => {
+                    with_room_mut(|r| {
+                        r.call_members.remove(client_id);
+                    });
+                    broadcast_call_state(btx);
+                }
+                _ => {}
+            }
         }
         _ => {}
     }
@@ -492,6 +553,12 @@ mod tests {
     use tokio_tungstenite::connect_async;
     use tokio_tungstenite::tungstenite::Message as WsMessage;
 
+    /// Serializes tests that mutate the global room state.
+    fn test_lock() -> &'static std::sync::Mutex<()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+    }
+
     async fn start_test_server() -> String {
         let app = chat_routes().layer(DefaultBodyLimit::max(MAX_FILE_BYTES as usize + (1 << 20)));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -504,6 +571,7 @@ mod tests {
 
     #[tokio::test]
     async fn chat_room_e2e() {
+        let _guard = test_lock().lock().unwrap();
         destroy_room().unwrap();
         create_room("hunter2".to_string()).unwrap();
 
@@ -729,6 +797,278 @@ mod tests {
 
         drop(tls_ws);
         handle.abort();
+
+        drop(bob_ws);
+        destroy_room().unwrap();
+    }
+
+    #[tokio::test]
+    async fn chat_signal_relay() {
+        let _guard = test_lock().lock().unwrap();
+        destroy_room().unwrap();
+        create_room("hunter2".to_string()).unwrap();
+
+        let base = start_test_server().await;
+        let client = reqwest::Client::new();
+
+        let alice: serde_json::Value = client
+            .post(format!("{}/api/chat/auth", base))
+            .json(&json!({"password": "hunter2", "name": "Alice"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let alice_token = alice["send_token"].as_str().unwrap().to_string();
+        let alice_id = alice["client_id"].as_str().unwrap().to_string();
+
+        let bob: serde_json::Value = client
+            .post(format!("{}/api/chat/auth", base))
+            .json(&json!({"password": "hunter2", "name": "Bob"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let bob_token = bob["send_token"].as_str().unwrap().to_string();
+        let bob_id = bob["client_id"].as_str().unwrap().to_string();
+
+        let alice_url =
+            base.replace("http", "ws") + format!("/api/chat/ws?token={}", alice_token).as_str();
+        let (mut alice_ws, _) = connect_async(&alice_url).await.unwrap();
+        let bob_url = base.replace("http", "ws") + format!("/api/chat/ws?token={}", bob_token).as_str();
+        let (mut bob_ws, _) = connect_async(&bob_url).await.unwrap();
+
+        // Drain welcome + join notices on both sockets.
+        for _ in 0..8 {
+            if let Some(Ok(m)) = alice_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "welcome" {
+                    break;
+                }
+            }
+        }
+        for _ in 0..8 {
+            if let Some(Ok(m)) = bob_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "welcome" {
+                    break;
+                }
+            }
+        }
+
+        // Alice sends a WebRTC "call" signal to Bob.
+        alice_ws
+            .send(WsMessage::Text(
+                json!({"type":"signal","to":bob_id,"signal":{"kind":"call","offer":{"type":"offer","sdp":"x"}}})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+
+        // Bob receives it, stamped with Alice's identity.
+        let mut got = None;
+        for _ in 0..8 {
+            if let Some(Ok(m)) = bob_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "signal" {
+                    got = Some(v);
+                    break;
+                }
+            }
+        }
+        let got = got.expect("signal was not relayed to the target");
+        assert_eq!(got["to"], bob_id);
+        assert_eq!(got["client_id"], alice_id);
+        assert_eq!(got["signal"]["kind"], "call");
+        assert_eq!(got["signal"]["offer"]["sdp"], "x");
+
+        // Bob answers back to Alice.
+        bob_ws
+            .send(WsMessage::Text(
+                json!({"type":"signal","to":alice_id,"signal":{"kind":"answer","answer":{"type":"answer","sdp":"y"}}})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+        let mut answered = false;
+        for _ in 0..8 {
+            if let Some(Ok(m)) = alice_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "signal" && v["signal"]["kind"] == "answer" {
+                    assert_eq!(v["to"], alice_id);
+                    assert_eq!(v["client_id"], bob_id);
+                    answered = true;
+                    break;
+                }
+            }
+        }
+        assert!(answered, "answer signal was not relayed back to Alice");
+
+        // Signals must NOT be broadcast back to the sender.
+        let leaked = tokio::time::timeout(Duration::from_millis(400), alice_ws.next())
+            .await
+            .ok()
+            .flatten()
+            .and_then(|r| r.ok());
+        assert!(leaked.is_none(), "signal leaked to the sender");
+
+        drop(alice_ws);
+        drop(bob_ws);
+        destroy_room().unwrap();
+    }
+
+    #[tokio::test]
+    async fn chat_call_state() {
+        let _guard = test_lock().lock().unwrap();
+        destroy_room().unwrap();
+        create_room("hunter2".to_string()).unwrap();
+
+        let base = start_test_server().await;
+        let client = reqwest::Client::new();
+
+        // Alice joins the room.
+        let alice: serde_json::Value = client
+            .post(format!("{}/api/chat/auth", base))
+            .json(&json!({"password": "hunter2", "name": "Alice"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let alice_token = alice["send_token"].as_str().unwrap().to_string();
+        let alice_url =
+            base.replace("http", "ws") + format!("/api/chat/ws?token={}", alice_token).as_str();
+        let (mut alice_ws, _) = connect_async(&alice_url).await.unwrap();
+
+        // Welcome must include an (empty) call_members list.
+        let mut welcome_has_call = false;
+        for _ in 0..8 {
+            if let Some(Ok(m)) = alice_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "welcome" {
+                    welcome_has_call = v["call_members"]
+                        .as_array()
+                        .map(|a| a.is_empty())
+                        .unwrap_or(false);
+                    break;
+                }
+            }
+        }
+        assert!(welcome_has_call, "welcome should include an empty call_members list");
+
+        // Alice starts the call.
+        alice_ws
+            .send(WsMessage::Text(json!({"type":"call","action":"join"}).to_string().into()))
+            .await
+            .unwrap();
+        let mut alice_only = false;
+        for _ in 0..8 {
+            if let Some(Ok(m)) = alice_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "call-state" {
+                    let arr = v["call_members"].as_array().unwrap();
+                    assert_eq!(arr.len(), 1);
+                    assert_eq!(arr[0]["name"], "Alice");
+                    alice_only = true;
+                    break;
+                }
+            }
+        }
+        assert!(alice_only, "Alice should receive a call-state listing herself");
+
+        // Bob joins the room mid-call; his welcome lists Alice as in the call.
+        let bob: serde_json::Value = client
+            .post(format!("{}/api/chat/auth", base))
+            .json(&json!({"password": "hunter2", "name": "Bob"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let bob_token = bob["send_token"].as_str().unwrap().to_string();
+        let bob_url =
+            base.replace("http", "ws") + format!("/api/chat/ws?token={}", bob_token).as_str();
+        let (mut bob_ws, _) = connect_async(&bob_url).await.unwrap();
+
+        let mut bob_saw_alice = false;
+        for _ in 0..8 {
+            if let Some(Ok(m)) = bob_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "welcome" {
+                    let names: Vec<&str> = v["call_members"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|x| x["name"].as_str().unwrap())
+                        .collect();
+                    bob_saw_alice = names.contains(&"Alice");
+                    break;
+                }
+            }
+        }
+        assert!(bob_saw_alice, "Bob's welcome should list Alice as in the call");
+
+        // Bob joins the call; both get a two-member call-state.
+        bob_ws
+            .send(WsMessage::Text(json!({"type":"call","action":"join"}).to_string().into()))
+            .await
+            .unwrap();
+        let mut both_saw_two = false;
+        for _ in 0..8 {
+            if let Some(Ok(m)) = bob_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "call-state" {
+                    if v["call_members"].as_array().unwrap().len() == 2 {
+                        both_saw_two = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(both_saw_two, "call-state should list both participants");
+
+        // Bob leaves the call; Alice sees only herself next.
+        bob_ws
+            .send(WsMessage::Text(json!({"type":"call","action":"leave"}).to_string().into()))
+            .await
+            .unwrap();
+        let mut alice_sees_leave = false;
+        for _ in 0..16 {
+            if let Some(Ok(m)) = alice_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "call-state" {
+                    let arr = v["call_members"].as_array().unwrap();
+                    let names: Vec<&str> =
+                        arr.iter().map(|x| x["name"].as_str().unwrap()).collect();
+                    if names.contains(&"Alice") && !names.contains(&"Bob") {
+                        alice_sees_leave = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(alice_sees_leave, "Alice should see Bob leave the call");
+
+        // Alice disconnects; the server broadcasts an empty call-state.
+        drop(alice_ws);
+        let mut bob_sees_empty = false;
+        for _ in 0..16 {
+            if let Some(Ok(m)) = bob_ws.next().await {
+                let v: serde_json::Value = serde_json::from_str(m.to_text().unwrap()).unwrap();
+                if v["type"] == "call-state" && v["call_members"].as_array().unwrap().is_empty() {
+                    bob_sees_empty = true;
+                    break;
+                }
+            }
+        }
+        assert!(bob_sees_empty, "Bob should be told the call ended when Alice disconnects");
 
         drop(bob_ws);
         destroy_room().unwrap();

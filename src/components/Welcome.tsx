@@ -156,7 +156,7 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
     features: [
       { icon: Globe, title: "Global Share", tag: "P2P", tool: "global-share", keywords: "global share p2p direct webrtc internet world wide send" },
       { icon: Download, title: "Global Receive", tag: "P2P", tool: "global-receive", keywords: "global receive p2p direct webrtc internet world wide receive" },
-      { icon: MessageCircle, title: "LAN Chat", tag: "E2EE", tool: "lan-chat", keywords: "lan chat local network encrypted end to end group room text image file e2ee" },
+      { icon: MessageCircle, title: "Local Chat", tag: "E2EE", tool: "lan-chat", keywords: "local chat lan chat local network encrypted end to end group room text image file e2ee" },
       { icon: QrCode, title: "Local Web Portal Send", tag: "Network", tool: "portal-send", keywords: "local web portal send share file qr code download browser" },
       { icon: Download, title: "Local Web Portal Receive", tag: "Network", tool: "portal-receive", keywords: "local web portal receive upload incoming file accept" },
     ],
