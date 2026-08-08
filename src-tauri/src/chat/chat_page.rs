@@ -85,11 +85,18 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
 .call-panel-head{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--border)}
 .call-panel-head .t{font-size:.78rem;font-weight:600;color:rgba(255,255,255,.9)}
 .call-panel-head .p{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-panel-head .spacer{flex:1}
+.call-head-btn{background:transparent;border:1px solid var(--border);color:var(--muted);width:30px;height:30px;border-radius:.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .2s,border-color .2s}
+.call-head-btn:hover{color:#fff;border-color:rgba(255,255,255,.3)}
 .call-panel-body{flex:1;position:relative;min-height:0}
-#remoteVideos{position:absolute;inset:0;display:flex;flex-direction:column;gap:.6rem;padding:.7rem;overflow-y:auto;box-sizing:border-box}
-.remote-cell{position:relative;border-radius:.9rem;overflow:hidden;border:1px solid var(--border);background:#000;flex-shrink:0;aspect-ratio:16/9}
+#remoteVideos{position:absolute;inset:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));align-content:start;gap:.6rem;padding:.7rem;overflow-y:auto;box-sizing:border-box}
+.remote-cell{position:relative;border-radius:.9rem;overflow:hidden;border:1px solid var(--border);background:#000;aspect-ratio:16/9}
+.remote-cell.featured{grid-column:1/-1;aspect-ratio:16/7}
 .remote-cell video{width:100%;height:100%;object-fit:cover}
-.remote-name{position:absolute;bottom:6px;left:8px;font-size:.62rem;color:#fff;background:rgba(0,0,0,.55);padding:.12rem .5rem;border-radius:.4rem;z-index:2}
+.remote-name{position:absolute;bottom:6px;left:8px;font-size:.62rem;color:#fff;background:rgba(0,0,0,.55);padding:.12rem .5rem;border-radius:.4rem;z-index:2;pointer-events:none}
+.pin-btn{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:.5rem;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.45);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;opacity:0;transition:opacity .15s,background .15s}
+.remote-cell:hover .pin-btn{opacity:1}
+.pin-btn.pinned{opacity:1;background:rgba(96,165,250,.45);border-color:rgba(96,165,250,.75)}
 #callLocalWrap{position:absolute;top:10px;right:10px;width:150px;height:112px;border-radius:.8rem;overflow:hidden;border:1px solid rgba(255,255,255,.2);z-index:2;background:#111;box-shadow:0 6px 18px rgba(0,0,0,.5)}
 #localVideo{width:100%;height:100%;object-fit:cover}
 #callStatus{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,.75);font-size:.85rem;text-align:center;z-index:3;pointer-events:none;max-width:90%}
@@ -102,7 +109,14 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
 #joinBar{display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:80;align-items:center;gap:.8rem;background:rgba(96,165,250,.16);border:1px solid rgba(96,165,250,.45);color:#fff;font-size:.82rem;padding:.5rem .6rem .5rem .95rem;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 #joinBar button{background:rgba(96,165,250,.35);color:#fff;border:1px solid rgba(96,165,250,.55);padding:.35rem .95rem;border-radius:999px;font-size:.75rem;font-weight:500;cursor:pointer}
 #joinBar button:hover{background:rgba(96,165,250,.5)}
-@media(max-width:719px){.roster{display:none}.msg{max-width:88%}}
+#chat.in-call .roster{display:none}
+#chat.in-call .chat-main{width:320px;flex:none;border-right:1px solid var(--border)}
+#chat.in-call #callPanel{flex:1;max-width:none;width:auto}
+#callPanel:fullscreen{width:100vw;height:100vh;max-width:none;border-left:none;background:#0a0a0a}
+#callPanel:fullscreen #remoteVideos{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+@media(max-width:1100px){#chat.in-call .chat-main{width:280px}}
+@media(max-width:900px){#chat.in-call .chat-main{width:240px}#remoteVideos{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}}
+@media(max-width:719px){.roster{display:none}.msg{max-width:88%}#chat.in-call .chat-main{display:none}#chat.in-call #callPanel{flex:1}#remoteVideos{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 </style>
 </head>
 <body>
@@ -168,6 +182,10 @@ h1{font-size:1.25rem;text-align:center;font-weight:600}
       <div class="call-panel-head">
         <span class="t">Video Call</span>
         <span class="p" id="callParticipantCount"></span>
+        <span class="spacer"></span>
+        <button class="call-head-btn" id="callFullscreenBtn" onclick="toggleCallFullscreen()" title="Fullscreen">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        </button>
       </div>
       <div class="call-panel-body">
         <div id="remoteVideos"></div>
@@ -200,7 +218,7 @@ var heartbeatTimer=null, reconnectTimer=null, joining=false;
 var members=new Map();
 var filesCache=new Map();
 var pendingFiles=[];
-var pcList={}, localStream=null, callMembers={}, inCall=false, callActive=false, micMuted=false, camOff=false;
+var pcList={}, localStream=null, callMembers={}, inCall=false, callActive=false, micMuted=false, camOff=false, pinnedId=null;
 
 function b64(u8){var c=new Uint8Array(u8),s='';for(var i=0;i<c.length;i+=0x8000){s+=String.fromCharCode.apply(null,c.subarray(i,i+0x8000));}return btoa(s);}
 function fromB64(s){var bin=atob(s),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++){u[i]=bin.charCodeAt(i);}return u;}
@@ -522,6 +540,7 @@ function startCall(){
     localStream=stream;
     inCall=true;callActive=true;
     $('localVideo').srcObject=stream;
+    $('chat').classList.add('in-call');
     $('callPanel').classList.add('active');
     $('callStatus').textContent='Waiting for others to join...';
     $('callStatus').style.display='block';
@@ -541,6 +560,7 @@ function joinCall(){
     localStream=stream;
     inCall=true;callActive=true;
     $('localVideo').srcObject=stream;
+    $('chat').classList.add('in-call');
     $('callPanel').classList.add('active');
     $('callStatus').textContent='Connecting...';
     $('callStatus').style.display='block';
@@ -562,9 +582,12 @@ function leaveCall(){
 
 function teardownCall(){
   inCall=false;
+  pinnedId=null;
   Object.keys(pcList).forEach(function(id){closePeer(id);});
   if(localStream){localStream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}
   localStream=null;
+  if(document.fullscreenElement){document.exitFullscreen();}
+  $('chat').classList.remove('in-call');
   $('callPanel').classList.remove('active');
   $('localVideo').srcObject=null;
   $('callStatus').style.display='none';
@@ -614,8 +637,10 @@ function createPeer(id,name){
   var p=new RTCPeerConnection();
   localStream.getTracks().forEach(function(t){p.addTrack(t,localStream);});
   var cell=document.createElement('div');cell.className='remote-cell';cell.id='rcell-'+id;
-  cell.innerHTML='<div class="remote-name">'+esc(name)+'</div><video id="rvideo-'+id+'" autoplay playsinline></video>';
+  cell.innerHTML='<button class="pin-btn" id="pinbtn-'+id+'" title="Pin video"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/></svg></button><div class="remote-name">'+esc(name)+'</div><video id="rvideo-'+id+'" autoplay playsinline></video>';
   $('remoteVideos').appendChild(cell);
+  var pb=$('pinbtn-'+id);
+  pb.onclick=function(ev){ev.stopPropagation();togglePin(id);};
   p.onicecandidate=function(ev){
     if(ev.candidate){wsSendSignal(id,{kind:'ice',candidate:ev.candidate});}
   };
@@ -634,10 +659,42 @@ function createPeer(id,name){
   return pcList[id];
 }
 
+function togglePin(id){
+  if(pinnedId===id){unpin(id);return;}
+  if(pinnedId){unpin(pinnedId);}
+  pinnedId=id;
+  var c=$('rcell-'+id);if(c){c.classList.add('featured');}
+  var b=$('pinbtn-'+id);if(b){b.classList.add('pinned');b.title='Unpin video';}
+}
+
+function unpin(id){
+  if(pinnedId===id){pinnedId=null;}
+  var c=$('rcell-'+id);if(c){c.classList.remove('featured');}
+  var b=$('pinbtn-'+id);if(b){b.classList.remove('pinned');b.title='Pin video';}
+}
+
+function toggleCallFullscreen(){
+  var el=$('callPanel');
+  if(document.fullscreenElement){document.exitFullscreen();}
+  else if(el.requestFullscreen){el.requestFullscreen().catch(function(){});}
+}
+
+function setFullscreenBtn(active){
+  var b=$('callFullscreenBtn');
+  if(!b){return;}
+  b.innerHTML=active
+    ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>'
+    : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  b.title=active?'Exit fullscreen':'Fullscreen';
+}
+
+document.addEventListener('fullscreenchange',function(){setFullscreenBtn(!!document.fullscreenElement);});
+
 function closePeer(id){
   var p=pcList[id];
   if(p){try{p.pc.close();}catch(e){}}
   delete pcList[id];
+  if(pinnedId===id){unpin(id);}
   var c=$('rcell-'+id);if(c){c.remove();}
   updateParticipantCount();
 }
@@ -744,6 +801,7 @@ window.joinCall=joinCall;
 window.leaveCall=leaveCall;
 window.toggleMute=toggleMute;
 window.toggleCam=toggleCam;
+window.toggleCallFullscreen=toggleCallFullscreen;
 $('password').focus();
 })();
 </script>
