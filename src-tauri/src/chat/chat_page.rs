@@ -3,6 +3,7 @@ pub const CHAT_HTML: &str = r####"<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob: https: wss: ws:; script-src 'self' 'unsafe-inline'; object-src 'none';">
 <title>TinyTools — E2EE Local Chat</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
@@ -800,6 +801,7 @@ h1 {
   gap: 0.75rem;
 }
 
+.composer-input,
 .composer textarea {
   flex: 1;
   resize: none;
@@ -810,14 +812,22 @@ h1 {
   font-size: 0.875rem;
   padding: 0.65rem 1.1rem;
   outline: none;
-  height: 40px;
   min-height: 40px;
   max-height: 120px;
   line-height: 1.45;
-  overflow-y: hidden;
+  overflow-y: auto;
   transition: all 0.2s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
+.composer-input:empty:before {
+  content: attr(data-placeholder);
+  color: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.composer-input:focus,
 .composer textarea:focus {
   border-color: var(--border-focus);
   background: rgba(255, 255, 255, 0.05);
@@ -844,6 +854,148 @@ h1 {
   border-color: var(--border-hover);
   background: var(--bg-glass-hover);
   transform: translateY(-1px);
+}
+
+.btn-sticker {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 44px;
+  height: 44px;
+  border-radius: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.btn-sticker:hover {
+  color: #fff;
+  border-color: var(--border-hover);
+  background: var(--bg-glass-hover);
+  transform: translateY(-1px);
+}
+
+.pending .pchip-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 0.35rem;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Sticker & GIF Popover Picker */
+#stickerPicker {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 1.5rem;
+  width: 320px;
+  max-height: 320px;
+  background: rgba(18, 18, 26, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  flex-direction: column;
+  overflow: hidden;
+  animation: stickerPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes stickerPop {
+  from { transform: translateY(8px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+#stickerPicker.active {
+  display: flex;
+}
+
+.sticker-header {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sticker-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sticker-tab.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sticker-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.4rem;
+}
+
+.sticker-item {
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.sticker-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.2);
+}
+
+.gif-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.gif-card {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  height: 90px;
+  position: relative;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.gif-card:hover {
+  transform: scale(1.03);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.gif-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .btn-send {
@@ -1657,20 +1809,30 @@ h1 {
     <div class="chat-main">
       <div class="messages" id="messages"></div>
       <div class="composer">
+        <div id="stickerPicker">
+          <div class="sticker-header">
+            <button class="sticker-tab active" id="tabStickers" onclick="switchStickerTab('stickers')">Stickers</button>
+            <button class="sticker-tab" id="tabGifs" onclick="switchStickerTab('gifs')">GIFs</button>
+          </div>
+          <div class="sticker-content" id="stickerContent"></div>
+        </div>
         <div class="pending" id="pending"></div>
         <div class="composer-row">
           <button class="btn-attach" onclick="document.getElementById('fileInput').click()" title="Attach file">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
           </button>
-          <textarea id="input" placeholder="Type a message... (Enter to send)" rows="1"></textarea>
+          <button class="btn-sticker" id="btnSticker" onclick="toggleStickerPicker(event)" title="Stickers &amp; GIFs">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+          </button>
+          <div id="input" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Type a message, paste/drop stickers, GIFs, images, files..." class="composer-input"></div>
           <button class="btn-send" onclick="send()" title="Send">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           </button>
         </div>
-        <div class="composer-hint">Drag &amp; drop files/images anywhere or paste to attach · files are relayed in memory (max 50 MB)</div>
+        <div class="composer-hint">Paste or drag &amp; drop stickers, GIFs, images, or files anywhere · max 50 MB</div>
       </div>
     </div>
-    
+
     <div id="callPanel">
       <div class="call-panel-head">
         <span class="t">Video Call</span>
@@ -1680,10 +1842,10 @@ h1 {
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
         </button>
       </div>
-      
+
       <div class="call-panel-body">
         <div id="remoteVideos"></div>
-        
+
         <!-- Local self Video PIP -->
         <div id="callLocalWrap">
           <div class="video-placeholder">
@@ -1692,10 +1854,10 @@ h1 {
           </div>
           <video id="localVideo" autoplay muted playsinline></video>
         </div>
-        
+
         <div id="callStatus"></div>
       </div>
-      
+
       <!-- Video controls bar -->
       <div class="call-controls">
         <button id="btnMute" onclick="toggleMute()" title="Mute microphone">
@@ -1711,20 +1873,20 @@ h1 {
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 2.59 3.4Z"/></svg>
         </button>
       </div>
-      
+
       <!-- Floating action buttons on video overlay on mobile -->
       <button id="floatingChatBtn" onclick="changeCallLayout('chat')" title="Open Chat Panel">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </button>
     </div>
-    
+
     <button id="floatingVideoBtn" onclick="changeCallLayout('video')" title="Back to Video Panel">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg>
     </button>
   </div>
 </div>
 
-<input type="file" id="fileInput" multiple style="display:none" onchange="onFilesSelected()">
+<input type="file" id="fileInput" multiple accept="image/*,image/gif,image/webp,image/png,image/jpeg,.gif,.webp,.png,.jpg,.jpeg,*" style="display:none" onchange="onFilesSelected()">
 
 <script>
 (function(){
@@ -1744,7 +1906,20 @@ var rosterOpen = false;
 
 function b64(u8){var c=new Uint8Array(u8),s='';for(var i=0;i<c.length;i+=0x8000){s+=String.fromCharCode.apply(null,c.subarray(i,i+0x8000));}return btoa(s);}
 function fromB64(s){var bin=atob(s),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++){u[i]=bin.charCodeAt(i);}return u;}
-function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function esc(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/[&<>"'`=]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;','=':'&#61;'}[c];
+  });
+}
+function sanitizeUrl(url){
+  if(!url) return '';
+  var trimmed=String(url).trim();
+  if(/^(https?:|data:image\/|blob:)/i.test(trimmed)){
+    return trimmed;
+  }
+  return '#';
+}
 function fmtSize(b){if(b<1024){return b+' B';}if(b<1048576){return (b/1024).toFixed(1)+' KB';}if(b<1073741824){return (b/1048576).toFixed(1)+' MB';}return (b/1073741824).toFixed(2)+' GB';}
 function fmtTime(t){var d=new Date(t*1000);return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function scrollBottom(){var el=$('messages');if(el){el.scrollTop=el.scrollHeight;}}
@@ -1936,7 +2111,26 @@ function renderText(own,sender,text,ts){
   var avatarGrad = getAvatarGradient(sender);
   var initials = getInitials(sender);
   
-  var bubbleContent = '';
+  var av = document.createElement('div');
+  av.className = 'msg-avatar';
+  av.style.background = avatarGrad;
+  av.textContent = initials;
+  
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  
+  var hdr = document.createElement('div');
+  hdr.className = 'msg-header';
+  var sSpan = document.createElement('span');
+  sSpan.className = 'msg-sender';
+  sSpan.textContent = sender;
+  var tSpan = document.createElement('span');
+  tSpan.className = 'msg-time';
+  tSpan.textContent = fmtTime(ts);
+  hdr.appendChild(sSpan);
+  hdr.appendChild(tSpan);
+  body.appendChild(hdr);
+  
   var trimmed = text.trim();
   var isGifUrl = false;
   if (trimmed.match(/^https?:\/\/[^\s]+$/i)) {
@@ -1947,28 +2141,32 @@ function renderText(own,sender,text,ts){
     }
   }
   
+  var gifMatch = text.match(/^\[gif:(.*)\]$/);
+  var validGifUrl = null;
   if (isGifUrl) {
-    bubbleContent = '<div class="bubble gif-bubble"><img src="' + esc(trimmed) + '" alt="gif" referrerpolicy="no-referrer"></div>';
-  } else {
-    var gifMatch = text.match(/^\[gif:(.*)\]$/);
-    if (gifMatch) {
-      var gifUrl = gifMatch[1];
-      bubbleContent = '<div class="bubble gif-bubble"><img src="' + esc(gifUrl) + '" alt="gif" referrerpolicy="no-referrer"></div>';
-    } else {
-      bubbleContent = '<div class="bubble">' + esc(text) + '</div>';
-    }
+    validGifUrl = sanitizeUrl(trimmed);
+  } else if (gifMatch) {
+    validGifUrl = sanitizeUrl(gifMatch[1]);
   }
   
-  el.innerHTML=
-    '<div class="msg-avatar" style="background:'+avatarGrad+'">'+esc(initials)+'</div>' +
-    '<div class="msg-body">' +
-      '<div class="msg-header">' +
-        '<span class="msg-sender">'+esc(sender)+'</span>' +
-        '<span class="msg-time">'+fmtTime(ts)+'</span>' +
-      '</div>' +
-      bubbleContent +
-    '</div>';
+  if (validGifUrl && validGifUrl !== '#') {
+    var b = document.createElement('div');
+    b.className = 'bubble gif-bubble';
+    var img = document.createElement('img');
+    img.src = validGifUrl;
+    img.alt = 'gif';
+    img.referrerPolicy = 'no-referrer';
+    b.appendChild(img);
+    body.appendChild(b);
+  } else {
+    var b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = text;
+    body.appendChild(b);
+  }
   
+  el.appendChild(av);
+  el.appendChild(body);
   $('messages').appendChild(el);
   scrollBottom();
 }
@@ -1979,27 +2177,58 @@ function renderFileCard(own,sender,m,btnLabel){
   var avatarGrad = getAvatarGradient(sender);
   var initials = getInitials(sender);
   
-  var icon=m.kind==='image'||(m.mime||'').indexOf('image/')===0
+  var av = document.createElement('div');
+  av.className = 'msg-avatar';
+  av.style.background = avatarGrad;
+  av.textContent = initials;
+  
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  
+  var hdr = document.createElement('div');
+  hdr.className = 'msg-header';
+  var sSpan = document.createElement('span');
+  sSpan.className = 'msg-sender';
+  sSpan.textContent = sender;
+  var tSpan = document.createElement('span');
+  tSpan.className = 'msg-time';
+  tSpan.textContent = fmtTime(m.ts);
+  hdr.appendChild(sSpan);
+  hdr.appendChild(tSpan);
+  body.appendChild(hdr);
+  
+  var card = document.createElement('div');
+  card.className = 'file-card';
+  
+  var fic = document.createElement('div');
+  fic.className = 'fic';
+  fic.innerHTML = m.kind==='image'||(m.mime||'').indexOf('image/')===0
     ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>'
     : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
   
-  el.innerHTML=
-    '<div class="msg-avatar" style="background:'+avatarGrad+'">'+esc(initials)+'</div>' +
-    '<div class="msg-body">' +
-      '<div class="msg-header">' +
-        '<span class="msg-sender">'+esc(sender)+'</span>' +
-        '<span class="msg-time">'+fmtTime(m.ts)+'</span>' +
-      '</div>' +
-      '<div class="file-card">' +
-        '<div class="fic">'+icon+'</div>' +
-        '<div class="meta">' +
-          '<div class="fname">'+esc(m.file_name||'file')+'</div>' +
-          '<div class="fsize">'+fmtSize(m.file_size||0)+'</div>' +
-        '</div>' +
-        '<button class="dbtn" id="btn-'+m.id+'">'+esc(btnLabel)+'</button>' +
-      '</div>' +
-    '</div>';
-    
+  var meta = document.createElement('div');
+  meta.className = 'meta';
+  var fname = document.createElement('div');
+  fname.className = 'fname';
+  fname.textContent = m.file_name || 'file';
+  var fsize = document.createElement('div');
+  fsize.className = 'fsize';
+  fsize.textContent = fmtSize(m.file_size || 0);
+  meta.appendChild(fname);
+  meta.appendChild(fsize);
+  
+  var btn = document.createElement('button');
+  btn.className = 'dbtn';
+  btn.id = 'btn-' + m.id;
+  btn.textContent = btnLabel;
+  
+  card.appendChild(fic);
+  card.appendChild(meta);
+  card.appendChild(btn);
+  body.appendChild(card);
+  
+  el.appendChild(av);
+  el.appendChild(body);
   $('messages').appendChild(el);
   scrollBottom();
   return el;
@@ -2085,23 +2314,36 @@ function renderRoster(){
   $('rosterTitle').textContent='Members ('+c+')';
 }
 
+function getInputValue(){
+  var el=$('input');
+  if(!el) return '';
+  return (el.value!==undefined ? el.value : el.innerText).trim();
+}
+
+function clearInputValue(){
+  var el=$('input');
+  if(!el) return;
+  if(el.value!==undefined){
+    el.value='';el.style.height='40px';el.style.overflowY='hidden';
+  }else{
+    el.innerText='';
+  }
+}
+
 function send(){
   if(!ws||ws.readyState!==1){systemNotice('Not connected');return;}
-  var input=$('input');
-  var text=input.value.trim();
+  var text=getInputValue();
   var hasText=text.length>0;
   if(!hasText&&pendingFiles.length===0){return;}
   if(hasText){
     encText(text).then(function(enc){
       ws.send(JSON.stringify({type:'msg',kind:'text',nonce:enc.n,ciphertext:enc.c}));
     });
-    input.value='';input.style.height='40px';input.style.overflowY='hidden';
+    clearInputValue();
   }
   var sending=[].concat(pendingFiles);
-  pendingFiles=[];
-  renderPending();
-  sending.forEach(function(f){sendFile(f);});
-  input.focus();
+  pendingFiles=[];renderPending();
+  sending.forEach(function(p){sendFile(p);});
 }
 
 function sendFile(f){
@@ -2159,7 +2401,14 @@ function renderPending(){
   var box=$('pending');box.innerHTML='';
   pendingFiles.forEach(function(p,i){
     var chip=document.createElement('span');chip.className='pchip';
-    chip.appendChild(document.createTextNode(p.file.name));
+    var isImg=(p.file.type||'').indexOf('image/')===0||p.file.name.match(/\.(gif|webp|png|jpe?g|svg)$/i);
+    if(isImg){
+      var img=document.createElement('img');
+      img.className='pchip-img';
+      img.src=URL.createObjectURL(p.file);
+      chip.appendChild(img);
+    }
+    chip.appendChild(document.createTextNode(' '+p.file.name));
     var x=document.createElement('span');x.className='x';x.textContent='✕';
     x.onclick=function(){pendingFiles.splice(i,1);renderPending();};
     chip.appendChild(x);box.appendChild(chip);
@@ -2170,6 +2419,133 @@ function attachFiles(fileList){
   for(var i=0;i<fileList.length;i++){addPendingFile(fileList[i]);}
   if(pendingFiles.length){renderPending();}
 }
+
+// ── Sticker & GIF Picker ──
+var currentStickerTab = 'stickers';
+var STICKERS = ['🔥', '🎉', '❤️', '🚀', '👍', '😂', '👏', '🥳', '💯', '✨', '🤩', '💡', '🎃', '💖', '🐶', '🍕', '🥑', '🌟', '🤖', '🐱', '🍩', '🌮', '🎈', '😎', '🙌', '😍', '💪', '🤝', '⚡', '🌈'];
+var GIFS = [
+  { name: 'Party Cat', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdW1pNDc4NXpjdTJ2YnQ2YWVwbnBqdzdqcmU4eHZscjRsbWZpOHcxbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VbnUQpnihPSIgIXuZv/giphy.gif' },
+  { name: 'Mind Blown', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHY5eGlsMHdhMnNocmx0eXBsdGg4OGludmV4dHhhYnVsdnRscTZlNSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif' },
+  { name: 'Thumbs Up', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbTVsdndhNms5NXUxejFiZjFhNTFmdWZ3Z3Btb3QyeHJsbG1xdW42bCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/111ebonMs90YLu/giphy.gif' },
+  { name: 'Popcorn', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcmJndXBzeGF5cmN1ODQ5cXU4MnU1cGU1MnFtbHRjMHVqODdkeXBrcSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/hVTouq08y8fzW/giphy.gif' }
+];
+
+function toggleStickerPicker(e){
+  if(e){e.stopPropagation();}
+  var p=$('stickerPicker');
+  if(!p) return;
+  var isActive=p.classList.contains('active');
+  if(isActive){
+    p.classList.remove('active');
+  } else {
+    p.classList.add('active');
+    renderStickerTab(currentStickerTab);
+  }
+}
+
+function switchStickerTab(tab){
+  currentStickerTab=tab;
+  $('tabStickers').classList.toggle('active', tab==='stickers');
+  $('tabGifs').classList.toggle('active', tab==='gifs');
+  renderStickerTab(tab);
+}
+
+function renderStickerTab(tab){
+  var content=$('stickerContent');
+  if(!content) return;
+  content.innerHTML='';
+  if(tab==='stickers'){
+    var grid=document.createElement('div');
+    grid.className='sticker-grid';
+    STICKERS.forEach(function(s){
+      var item=document.createElement('div');
+      item.className='sticker-item';
+      item.textContent=s;
+      item.onclick=function(){
+        insertSticker(s);
+        $('stickerPicker').classList.remove('active');
+      };
+      grid.appendChild(item);
+    });
+    content.appendChild(grid);
+  } else if(tab==='gifs'){
+    var wrap=document.createElement('div');
+    wrap.style.display='flex';
+    wrap.style.flexDirection='column';
+    wrap.style.gap='0.5rem';
+    
+    var customRow=document.createElement('div');
+    customRow.style.display='flex';
+    customRow.style.gap='0.35rem';
+    
+    var gifUrlInput=document.createElement('input');
+    gifUrlInput.type='text';
+    gifUrlInput.placeholder='Paste GIF URL...';
+    gifUrlInput.style.cssText='flex:1;padding:0.35rem 0.6rem;border-radius:0.5rem;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:#fff;font-size:0.75rem;outline:none;';
+    
+    var sendUrlBtn=document.createElement('button');
+    sendUrlBtn.textContent='Send';
+    sendUrlBtn.style.cssText='padding:0.35rem 0.75rem;border-radius:0.5rem;background:var(--accent-solid);color:#fff;border:none;font-size:0.75rem;font-weight:600;cursor:pointer;';
+    sendUrlBtn.onclick=function(){
+      var u=gifUrlInput.value.trim();
+      if(u){
+        sendGifUrl(u);
+        $('stickerPicker').classList.remove('active');
+      }
+    };
+    
+    customRow.appendChild(gifUrlInput);
+    customRow.appendChild(sendUrlBtn);
+    wrap.appendChild(customRow);
+    
+    var grid=document.createElement('div');
+    grid.className='gif-grid';
+    GIFS.forEach(function(g){
+      var card=document.createElement('div');
+      card.className='gif-card';
+      card.title=g.name;
+      var img=document.createElement('img');
+      img.src=g.url;
+      img.alt=g.name;
+      card.appendChild(img);
+      card.onclick=function(){
+        sendGifUrl(g.url);
+        $('stickerPicker').classList.remove('active');
+      };
+      grid.appendChild(card);
+    });
+    wrap.appendChild(grid);
+    content.appendChild(wrap);
+  }
+}
+
+function insertSticker(sticker){
+  var inp=$('input');
+  if(!inp) return;
+  var current = inp.value!==undefined ? inp.value : inp.innerText;
+  var val = current + (current ? ' ' : '') + sticker;
+  if(inp.value!==undefined) inp.value = val;
+  else inp.innerText = val;
+  inp.focus();
+}
+
+function sendGifUrl(url){
+  if(!ws||ws.readyState!==1){systemNotice('Not connected');return;}
+  var cleanUrl=sanitizeUrl(url);
+  if(cleanUrl==='#'){systemNotice('Invalid or unsafe GIF URL');return;}
+  encText('[gif:'+cleanUrl+']').then(function(enc){
+    ws.send(JSON.stringify({type:'msg',kind:'text',nonce:enc.n,ciphertext:enc.c}));
+  });
+}
+
+document.addEventListener('click', function(e){
+  var p=$('stickerPicker'), b=$('btnSticker');
+  if(p && p.classList.contains('active')){
+    if(!p.contains(e.target) && (!b || !b.contains(e.target))){
+      p.classList.remove('active');
+    }
+  }
+});
 
 // ── Room-wide video call (WebRTC mesh) ──
 function wsSendSignal(to,signal){
@@ -2716,6 +3092,31 @@ document.addEventListener('paste',function(e){
   if(found){renderPending();}
 });
 
+$('input').addEventListener('paste',function(e){
+  var items=(e.clipboardData&&e.clipboardData.items)||[];
+  var found=false;
+  for(var i=0;i<items.length;i++){
+    if(items[i].kind==='file'){
+      var f=items[i].getAsFile();
+      if(f){addPendingFile(f);found=true;}
+    }
+  }
+  if(found){renderPending();}
+});
+
+$('input').addEventListener('dragover',function(e){
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+$('input').addEventListener('drop',function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){
+    attachFiles(e.dataTransfer.files);
+  }
+});
+
 $('input').addEventListener('keydown',function(e){
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}
 });
@@ -2746,6 +3147,8 @@ window.toggleScreenShare=toggleScreenShare;
 window.toggleCallFullscreen=toggleCallFullscreen;
 window.changeCallLayout=changeCallLayout;
 window.toggleRoster=toggleRoster;
+window.toggleStickerPicker=toggleStickerPicker;
+window.switchStickerTab=switchStickerTab;
 
 $('password').focus();
 })();
