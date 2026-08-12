@@ -145,6 +145,8 @@ pub fn run() {
             commands::video_tools::add_video_watermark,
             commands::video_tools::burn_subtitles,
             commands::video_tools::extract_frames,
+            // Text to Speech
+            commands::tts::generate_tts_audio,
         ])
         .run(tauri::generate_context!())
         .expect("error while running TinyTools");

@@ -29,6 +29,7 @@ import GraphCalculator from "./components/GraphCalculator";
 import TimeCalculator from "./components/TimeCalculator";
 import UnitCalculator from "./components/UnitCalculator";
 import EquationCalculator from "./components/EquationCalculator";
+import TtsPage from "./components/TtsPage";
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 };
 
@@ -89,6 +90,7 @@ function AppInner() {
       case "calc-time": return <TimeCalculator key="calc-time" />;
       case "calc-unit": return <UnitCalculator key="calc-unit" />;
       case "calc-equation": return <EquationCalculator key="calc-equation" />;
+      case "tts": return <TtsPage key="tts" />;
       default: return <Welcome key="welcome" onNavigate={handleNavigate} />;
     }
   };

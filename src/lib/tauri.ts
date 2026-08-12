@@ -560,3 +560,19 @@ export interface MetadataEntry {
   tag: string;
   value: string;
 }
+
+// ── Text to Speech ─────────────────────────────────────────────
+export interface TtsResult {
+  success: boolean;
+  output_path: string | null;
+  message: string;
+}
+
+export async function generateTtsAudio(
+  text: string,
+  outputPath: string,
+  rate: number,
+  voice?: string
+): Promise<TtsResult> {
+  return invoke<TtsResult>("generate_tts_audio", { text, outputPath, rate, voice });
+}

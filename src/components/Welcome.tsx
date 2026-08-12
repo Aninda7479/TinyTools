@@ -83,6 +83,13 @@ const sections: { label: string; icon: typeof Brain; features: Feature[] }[] = [
     ],
   },
   {
+    label: "Audio",
+    icon: Volume2,
+    features: [
+      { icon: Volume2, title: "Text to Speech", tag: "Speech", tool: "tts", keywords: "text to speech tts voice read audio speak local" },
+    ],
+  },
+  {
     label: "QR Code",
     icon: QrCode,
     features: [

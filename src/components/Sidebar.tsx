@@ -21,7 +21,8 @@ export type Tool =
   | "portal-send" | "portal-receive" | "video"
   | "global-share" | "global-receive" | "lan-chat"
   | "calc-sci" | "calc-graph" | "calc-time" | "calc-unit" | "calc-equation"
-  | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share" | "cat-video" | "cat-calculator";
+  | "tts"
+  | "cat-image" | "cat-qr" | "cat-pdf" | "cat-security" | "cat-encode" | "cat-hash" | "cat-share" | "cat-video" | "cat-calculator" | "cat-audio";
 
 export interface Feature {
   icon: typeof Brain;
@@ -95,6 +96,14 @@ export const sidebarCategories: SidebarCategory[] = [
       { icon: Stamp, title: "Watermark", tag: "Advanced", tool: "video", sub: "watermark" },
       { icon: Scissors, title: "Burn Subtitles", tag: "Advanced", tool: "video", sub: "subtitles" },
       { icon: ImageIcon, title: "Frame Extract", tag: "Advanced", tool: "video", sub: "frames" },
+    ],
+  },
+  {
+    id: "cat-audio",
+    icon: Volume2,
+    label: "Audio",
+    features: [
+      { icon: Volume2, title: "Text to Speech", tag: "Speech", tool: "tts" },
     ],
   },
   {

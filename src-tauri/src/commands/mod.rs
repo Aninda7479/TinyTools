@@ -8,6 +8,7 @@ pub mod hasher;
 pub mod password_tools;
 pub mod pdf_tools;
 pub mod privacy;
+pub mod tts;
 pub mod video_tools;
 
 use image_core::{compress_image as core_compress, process_image as core_process};
