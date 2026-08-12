@@ -4,6 +4,7 @@ import {
   MessageCircle, Copy, Check, Shield, Eye, EyeOff, ExternalLink, X, Users,
 } from "lucide-react";
 import * as chat from "../lib/chat-api";
+import { openInBrowser } from "../lib/tauri";
 
 export default function LanChatPage() {
   const [password, setPassword] = useState("");
@@ -74,7 +75,7 @@ export default function LanChatPage() {
   };
 
   const handleOpen = () => {
-    if (room) window.open(room.url, "_blank");
+    if (room) openInBrowser(room.url);
   };
 
   const handleCopy = async () => {

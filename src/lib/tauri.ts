@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
 
 export interface FileInfo {
   name: string;
@@ -486,6 +487,18 @@ export function isTauri(): boolean {
     w.__TAURI_INTERNALS__ ||
     (typeof import.meta !== 'undefined' && import.meta.env?.TAURI_TARGET_TRIPLE)
   );
+}
+
+export async function openInBrowser(url: string): Promise<void> {
+  if (isTauri()) {
+    try {
+      await openUrl(url);
+      return;
+    } catch (e) {
+      console.warn("Shell openUrl failed, falling back to window.open:", e);
+    }
+  }
+  window.open(url, "_blank");
 }
 
 // -- WASM fallback --

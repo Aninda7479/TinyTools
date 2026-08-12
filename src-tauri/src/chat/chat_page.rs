@@ -1279,6 +1279,13 @@ h1 {
   color: var(--red);
 }
 
+.call-controls button.active {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
 /* Join Video Call banner overlay */
 #joinBar {
   display: none;
@@ -1697,6 +1704,9 @@ h1 {
         <button id="btnCam" onclick="toggleCam()" title="Turn camera off">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg>
         </button>
+        <button id="btnScreenShare" onclick="toggleScreenShare()" title="Share screen">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><rect width="18" height="14" x="3" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m17 8-5-5"/><path d="M17 3h5v5"/></svg>
+        </button>
         <button class="danger" onclick="leaveCall()" title="Leave call">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 2.59 3.4Z"/></svg>
         </button>
@@ -1726,6 +1736,7 @@ var members=new Map();
 var filesCache=new Map();
 var pendingFiles=[];
 var pcList={}, localStream=null, callMembers={}, inCall=false, callActive=false, micMuted=false, camOff=false, pinnedId=null;
+var screenSharing=false, screenStream=null;
 
 // Responsive & Layout Settings
 var mobileCallLayout = 'split'; 
@@ -2296,6 +2307,7 @@ function leaveCall(){
 }
 
 function teardownCall(){
+  if(screenSharing){stopScreenShare(true);}
   inCall=false;
   pinnedId=null;
   Object.keys(pcList).forEach(function(id){closePeer(id);});
@@ -2313,6 +2325,11 @@ function teardownCall(){
   $('btnMute').title='Mute microphone';
   $('btnCam').classList.remove('off');
   $('btnCam').title='Turn camera off';
+  var b = $('btnScreenShare');
+  if(b){
+    b.classList.remove('active');
+    b.title='Share screen';
+  }
 }
 
 function handleCallState(memberList){
@@ -2353,9 +2370,27 @@ function syncPeer(id,name){
   if(clientId<id){createOfferTo(id,name);}
 }
 
+function broadcastMediaStatus(){
+  var status={kind:'media-status',camOff:camOff,micMuted:micMuted,screenSharing:screenSharing};
+  Object.keys(pcList).forEach(function(id){
+    wsSendSignal(id,status);
+  });
+}
+
 function createPeer(id,name){
   var p=new RTCPeerConnection();
-  localStream.getTracks().forEach(function(t){p.addTrack(t,localStream);});
+  var vSender=null, aSender=null;
+  if(localStream){
+    localStream.getTracks().forEach(function(t){
+      var trackToSend=t;
+      if(t.kind==='video'&&screenSharing&&screenStream&&screenStream.getVideoTracks().length>0){
+        trackToSend=screenStream.getVideoTracks()[0];
+      }
+      var s=p.addTrack(trackToSend,localStream);
+      if(t.kind==='video') vSender=s;
+      if(t.kind==='audio') aSender=s;
+    });
+  }
   
   var avatarGrad = getAvatarGradient(name);
   var initials = getInitials(name);
@@ -2380,26 +2415,34 @@ function createPeer(id,name){
   };
   p.ontrack=function(ev){
     var v=$('rvideo-'+id);
-    if(v&&ev.streams&&ev.streams[0]){v.srcObject=ev.streams[0];}
+    if(v){
+      if(ev.streams&&ev.streams[0]){
+        v.srcObject=ev.streams[0];
+      }else{
+        if(!v.srcObject){
+          v.srcObject=new MediaStream([ev.track]);
+        }else{
+          v.srcObject.addTrack(ev.track);
+        }
+      }
+    }
     $('callStatus').style.display='none';
     
-    // Monitor camera off/track mute event
-    ev.track.onmute = function() {
-      if(ev.track.kind === 'video') {
-        var c = $('rcell-'+id);
-        if(c) c.classList.add('cam-muted');
-      }
-    };
-    ev.track.onunmute = function() {
-      if(ev.track.kind === 'video') {
-        var c = $('rcell-'+id);
-        if(c) c.classList.remove('cam-muted');
-      }
-    };
-    
-    if(ev.track.kind === 'video' && ev.track.muted) {
-      var c = $('rcell-'+id);
-      if(c) c.classList.add('cam-muted');
+    var c=$('rcell-'+id);
+    if(c&&ev.track.kind==='video'){
+      c.classList.remove('cam-muted');
+      
+      ev.track.onunmute=function(){
+        var cell=$('rcell-'+id);
+        if(cell) cell.classList.remove('cam-muted');
+      };
+      
+      ev.track.onmute=function(){
+        var cell=$('rcell-'+id);
+        if(cell&&!ev.track.enabled){
+          cell.classList.add('cam-muted');
+        }
+      };
     }
   };
   p.onconnectionstatechange=function(){
@@ -2407,7 +2450,7 @@ function createPeer(id,name){
       closePeer(id);
     }
   };
-  pcList[id]={pc:p,name:name};
+  pcList[id]={pc:p,name:name,videoSender:vSender,audioSender:aSender};
   updateParticipantCount();
   return pcList[id];
 }
@@ -2474,14 +2517,26 @@ function handleSignal(fromId,fromName,s){
       return p.pc.setLocalDescription(ans);
     }).then(function(){
       wsSendSignal(fromId,{kind:'answer',answer:p.pc.localDescription});
+      broadcastMediaStatus();
     }).catch(function(){closePeer(fromId);});
   }else if(kind==='answer'){
     if(pcList[fromId]&&pcList[fromId].pc){
-      pcList[fromId].pc.setRemoteDescription(s.answer).catch(function(){closePeer(fromId);});
+      pcList[fromId].pc.setRemoteDescription(s.answer).then(function(){
+        broadcastMediaStatus();
+      }).catch(function(){closePeer(fromId);});
     }
   }else if(kind==='ice'){
     if(pcList[fromId]&&pcList[fromId].pc){
       pcList[fromId].pc.addIceCandidate(s.candidate).catch(function(){});
+    }
+  }else if(kind==='media-status'){
+    var c=$('rcell-'+fromId);
+    if(c){
+      if(s.camOff&&!s.screenSharing){
+        c.classList.add('cam-muted');
+      }else{
+        c.classList.remove('cam-muted');
+      }
     }
   }
 }
@@ -2519,6 +2574,7 @@ function toggleMute(){
   localStream.getAudioTracks().forEach(function(t){t.enabled=!micMuted;});
   $('btnMute').classList.toggle('off',micMuted);
   $('btnMute').title=micMuted?'Unmute microphone':'Mute microphone';
+  broadcastMediaStatus();
 }
 
 function toggleCam(){
@@ -2528,7 +2584,105 @@ function toggleCam(){
   $('btnCam').classList.toggle('off',camOff);
   $('btnCam').title=camOff?'Turn camera on':'Turn camera off';
   
+  $('callLocalWrap').classList.toggle('cam-muted', camOff && !screenSharing);
+  broadcastMediaStatus();
+}
+
+function toggleScreenShare(){
+  if(!inCall){
+    systemNotice('Join a video call first to share your screen');
+    return;
+  }
+  if(screenSharing){
+    stopScreenShare(false);
+  } else {
+    startScreenShare();
+  }
+}
+
+function startScreenShare(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+    systemNotice('Screen sharing is not supported in this browser');
+    return;
+  }
+  navigator.mediaDevices.getDisplayMedia({video:true, audio:true})
+    .then(function(stream){
+      screenStream=stream;
+      screenSharing=true;
+      var screenTrack=stream.getVideoTracks()[0];
+      
+      if(screenTrack){
+        screenTrack.onended=function(){
+          stopScreenShare(false);
+        };
+      }
+      
+      // Replace video track for all active peer connections
+      Object.keys(pcList).forEach(function(id){
+        var peerObj=pcList[id];
+        if(peerObj&&screenTrack){
+          if(peerObj.videoSender){
+            peerObj.videoSender.replaceTrack(screenTrack).catch(function(err){console.warn('replaceTrack failed:',err);});
+          }else if(peerObj.pc){
+            peerObj.videoSender=peerObj.pc.addTrack(screenTrack,stream);
+          }
+        }
+      });
+      
+      // Update local PIP preview to show screen stream
+      $('localVideo').srcObject=stream;
+      $('callLocalWrap').classList.remove('cam-muted');
+      var b=$('btnScreenShare');
+      if(b){
+        b.classList.add('active');
+        b.title='Stop sharing screen';
+      }
+      broadcastMediaStatus();
+      systemNotice('You started screen sharing');
+    })
+    .catch(function(e){
+      if(e.name!=='NotAllowedError'&&e.name!=='AbortError'){
+        systemNotice('Could not start screen share: '+esc(e.message||'error'));
+      }
+    });
+}
+
+function stopScreenShare(silent){
+  if(screenStream){
+    screenStream.getTracks().forEach(function(t){try{t.stop();}catch(err){}});
+    screenStream=null;
+  }
+  screenSharing=false;
+  
+  var camTrack=null;
+  if(localStream&&localStream.getVideoTracks().length>0){
+    camTrack=localStream.getVideoTracks()[0];
+  }
+  
+  // Revert video track for all active peer connections
+  Object.keys(pcList).forEach(function(id){
+    var peerObj=pcList[id];
+    if(peerObj&&peerObj.videoSender){
+      peerObj.videoSender.replaceTrack(camTrack).catch(function(err){console.warn('replaceTrack revert failed:',err);});
+    }
+  });
+  
+  // Revert local PIP preview back to camera stream
+  if(localStream){
+    $('localVideo').srcObject=localStream;
+  }
   $('callLocalWrap').classList.toggle('cam-muted', camOff);
+  
+  var b=$('btnScreenShare');
+  if(b){
+    b.classList.remove('active');
+    b.title='Share screen';
+  }
+  
+  broadcastMediaStatus();
+  if(!silent){
+    systemNotice('Stopped sharing screen');
+  }
 }
 
 // Drag & Drop File Sharing Panel
@@ -2588,6 +2742,7 @@ window.joinCall=joinCall;
 window.leaveCall=leaveCall;
 window.toggleMute=toggleMute;
 window.toggleCam=toggleCam;
+window.toggleScreenShare=toggleScreenShare;
 window.toggleCallFullscreen=toggleCallFullscreen;
 window.changeCallLayout=changeCallLayout;
 window.toggleRoster=toggleRoster;
