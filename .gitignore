@@ -11,3 +11,4 @@ crates/image-core/target/
 Thumbs.db
 graphify-out
 ~/.tauri
+temp/

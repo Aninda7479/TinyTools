@@ -7,6 +7,7 @@ export interface Feature {
   tool: Tool;
   sub?: string;
   keywords: string;
+  image?: string;
 }
 
 export interface Section {

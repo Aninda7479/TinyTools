@@ -9,12 +9,22 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Display",
-    "Helvetica Neue", sans-serif;
-  background-color: #1e1e1e;
-  color: #ffffff;
+  font-family: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background-color: #0c1324;
+  color: #dce1fb;
   overflow: hidden;
   user-select: none;
+}
+
+.tool-card {
+  transition: all 0.2s ease-in-out;
+}
+.tool-card:active {
+  transform: scale(0.98);
+}
+.tool-card:hover {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
 ::-webkit-scrollbar {
